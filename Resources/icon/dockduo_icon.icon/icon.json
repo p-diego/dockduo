@@ -1,0 +1,85 @@
+{
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "barra.svg",
+          "name": "Barra",
+          "position": {
+            "scale": 1.0,
+            "translation-in-points": [
+              0,
+              188
+            ]
+          }
+        }
+      ],
+      "name": "Barra",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "mostro-occhi.svg",
+          "name": "Mostro \u00b7 occhi",
+          "position": {
+            "scale": 5.661103769492993,
+            "translation-in-points": [
+              25.172264877547946,
+              -39.975001083898746
+            ]
+          }
+        },
+        {
+          "image-name": "mostro-corpo.svg",
+          "name": "Mostro \u00b7 corpo",
+          "position": {
+            "scale": 5.661103769492993,
+            "translation-in-points": [
+              25.172264877547946,
+              -39.975001083898746
+            ]
+          }
+        },
+        {
+          "image-name": "mostro-bordino.svg",
+          "name": "Mostro \u00b7 bordino",
+          "position": {
+            "scale": 5.661103769492993,
+            "translation-in-points": [
+              25.172264877547946,
+              -39.975001083898746
+            ]
+          }
+        }
+      ],
+      "name": "Mostro",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  },
+  "fill-specializations": [
+    {
+      "value": {
+        "solid": "extended-srgb:0.00000,0.00000,0.00000,1.00000"
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "solid": "extended-srgb:0.00000,0.00000,0.00000,1.00000"
+      }
+    }
+  ]
+}

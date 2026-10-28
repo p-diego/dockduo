@@ -1,0 +1,12 @@
+#!/bin/sh
+# dockduo-hook <working|waiting|done|end>  — stdin: il JSON del hook dell'agente, inoltrato com'è. Bundle: l'app che ospita il terminale, o $DOCKDUO_BUNDLE se manca (l'app ChatGPT non lo passa). Pid: chi chiama (l'agente, o un suo sh -c), per trovare l'app quando nessuno dei due c'è (dockduo, hostBundle) e per chiudere la sessione se l'agente muore senza SessionEnd (agentPid).
+# Mai output, sempre exit 0: lo stdout di UserPromptSubmit finirebbe nel contesto e un hook fallito non deve
+# fermare l'agente. Se dockduo non gira, nc fallisce in silenzio; se gira chiude subito dopo la riga (~15 ms).
+exec >/dev/null 2>&1
+# Il payload contiene prompt e output dei tool: va solo a un socket creato da noi (un altro utente locale potrebbe
+# occupare il path in /tmp prima di dockduo).
+s="/tmp/dockduo-$(id -u).sock"; [ -S "$s" ] && [ -O "$s" ] || exit 0
+printf '{"agent":"%s","state":"%s","bundle":"%s","pid":%d,"payload":%s}\n' \
+  "${DOCKDUO_AGENT:-claude}" "$1" "${__CFBundleIdentifier:-$DOCKDUO_BUNDLE}" "$PPID" "$(cat)" \
+  | /usr/bin/nc -U -w 1 "$s"
+exit 0
