@@ -167,6 +167,16 @@ final class Poller {
         tick()
     }
 
+    // Il sync di AeroSpace tornato (spaceStep .back). Appena aperto AeroSpace può non rispondere ancora alla prova a secco:
+    // .rejected, che nessun giro riprova (prima della 0.21 la barra resterebbe nascosta). Allora una volta, dopo 3 s, si
+    // riprova; `resyncing` resta acceso fino alla fine.
+    private func resync(retry: Bool) {
+        MainActor.assumeIsolated { syncAerospaceGaps { [self] in
+            state.spaceProblem = $0
+            if retry, $0 == .rejected { DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.resync(retry: false) } } else { resyncing = false }
+        } }
+    }
+
     // Un tick in corso assorbe le richieste arrivate nel frattempo in un solo tick successivo.
     func tick() {
         if inFlight { pending = true; return }
@@ -191,7 +201,7 @@ final class Poller {
         case .gone: state.spaceProblem = .notOpen
         case .back where !resyncing:
             resyncing = true
-            MainActor.assumeIsolated { syncAerospaceGaps { [self] in state.spaceProblem = $0; resyncing = false } }
+            resync(retry: true)
         default: break
         }
         // Con gli eventi la finestra a fuoco è già nota (.some(nil) = nessuna); senza, la si chiede ad AeroSpace.
