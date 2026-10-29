@@ -16,6 +16,12 @@ enum Side: String { case left, right }
 // vuole come lo vede (25/10: «hai sbagliato la dimensione massima»).
 let sideWidths: ClosedRange<Double> = 38...150
 
+// La barra larga quanto il Dock di macOS con caselle `tilesize`: il Dock a 31 è la barra a 52 (come dockUnit); numeri interi
+// come il trascinamento della linea.
+func widthForDockTiles(_ tilesize: Double) -> Double {
+    clamped((tilesize * 52 / 31).rounded(), to: sideWidths, default: 52)
+}
+
 // Un numero salvato, riportato nei suoi limiti; assente o non numerico = il default.
 func clamped(_ value: Double?, to range: ClosedRange<Double>, default fallback: Double) -> Double {
     guard let value else { return fallback }
@@ -69,7 +75,8 @@ private func firstAIMascotSounds(_ data: Data?) -> (sounds: Bool, volume: Int)? 
     var agentSounds: Bool { didSet { defaults.set(agentSounds, forKey: "dockduo.agentSounds") } }
     var agentVolume: Double { didSet { defaults.set(agentVolume, forKey: "dockduo.agentVolume") } }
 
-    init(defaults: UserDefaults) {
+    // `dock`: com.apple.dock, da cui si legge (mai si scrive) la grandezza del Dock per la prima volta (le prove ne danno uno loro).
+    init(defaults: UserDefaults, dock: UserDefaults? = UserDefaults(suiteName: "com.apple.dock")) {
         self.defaults = defaults
         // Chiave assente = il default.
         func bool(_ key: String, _ fallback: Bool) -> Bool { defaults.object(forKey: "dockduo.\(key)") as? Bool ?? fallback }
@@ -112,6 +119,13 @@ private func firstAIMascotSounds(_ data: Data?) -> (sounds: Bool, volume: Int)? 
                               to: 0...1, default: 0.35)
         if defaults.object(forKey: "dockduo.agentSounds") == nil { defaults.set(agentSounds, forKey: "dockduo.agentSounds") }
         if defaults.object(forKey: "dockduo.agentVolume") == nil { defaults.set(agentVolume, forKey: "dockduo.agentVolume") }
+        // Un'installazione nuova (niente Dock salvati, setup non fatto, niente larghezza) parte larga come il Dock di macOS, e
+        // si salva subito (spec app conclusa §2.1). Altrimenti non si scrive nulla.
+        if docksData == nil, !setupDone, defaults.object(forKey: "dockduo.sideWidth") == nil,
+           let tilesize = dock?.object(forKey: "tilesize") as? Double {
+            sideWidth = widthForDockTiles(tilesize)
+            defaults.set(sideWidth, forKey: "dockduo.sideWidth")
+        }
     }
 
     func isOn(_ item: BarItem) -> Bool { docks.contains { $0.sections.contains(item) } }

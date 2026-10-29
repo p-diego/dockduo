@@ -349,7 +349,7 @@ private func threeApps() -> [AppEntry] {
         return (items.map(\.title), items[0], items[1].submenu?.items ?? [], items[2].submenu?.items ?? [], items.last)
     }
     var menu = shown()
-    #expect(menu.titles == ["Turn Hiding On", "Position on Screen", "Minimize Using", "", "Edit Dock…", "Settings"])
+    #expect(menu.titles == ["Turn Hiding On", "Position on Screen", "Minimize Using", "NSMenuItem", "", "Edit Dock…", "Settings"])
     #expect(menu.sides.map(\.title) == ["Left", "Right"] && menu.sides.map(\.state) == [.on, .off])
     #expect(menu.effects.map(\.title) == ["Genie Effect", "Scale Effect"] && menu.effects.map(\.state) == [.on, .off])
     s.autohide = true; s.barSide = .right; dock.set("scale", forKey: "mineffect")

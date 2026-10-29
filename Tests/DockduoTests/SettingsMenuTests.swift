@@ -33,13 +33,13 @@ private struct Broken: LocalizedError { var errorDescription: String? { "broken"
     let item = settingsMenuItem(settings: s, integrations: [], dock: dock)
     let menu = try #require(item.submenu)
     let update: [String] = updateItems(Updater.shared.state, checkError: Updater.shared.checkError, current: Updater.shared.current).map(\.title)
-    let line = ["Turn Hiding On", "Position on Screen", "Minimize Using"]
+    let line = ["Turn Hiding On", "Position on Screen", "Minimize Using", "NSMenuItem"]
     let expected: [String] = line + ["", "AI Agents", "Sounds", "Open at Login", ""] + update + ["", "Setup…", "", "About dockduo", "Quit dockduo"]
     #expect(item.title == "Settings")
     #expect(menu.items.map(\.title) == expected)
     let fromLine = DockLineMenuView(settings: s, dock: dock, update: { .idle }).menu().items.prefix(3)
     #expect(menu.items.prefix(3).map { $0.submenu?.items.map(\.title) } == fromLine.map { $0.submenu?.items.map(\.title) })
-    #expect(menu.items[4].submenu != nil && menu.items[5].submenu != nil)
+    #expect(menu.items[5].submenu != nil && menu.items[6].submenu != nil)
     choose(menu.items[0])
     #expect(s.autohide)
 }
@@ -153,4 +153,20 @@ private struct Broken: LocalizedError { var errorDescription: String? { "broken"
     #expect(titles(.downloading(r)) == ["Version 0.39 · Downloading 0.40…", "Check for Updates…"])
     #expect(titles(.failed("x")) == ["Version 0.39 · Update failed: x", "Download the DMG", "Check for Updates…"])
     #expect(!updateItems(.idle, checkError: nil, current: "0.39")[0].isEnabled)
+}
+
+// Spec app conclusa §2.2: Dimensione è l'ultima voce delle quattro del Dock, uguale nel menu della linea e in Impostazioni ›;
+// il cursore scrive la larghezza della barra.
+@MainActor @Test func theSizeRowIsInBothMenus() throws {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dock, dockName) = fresh(); defer { dock.removePersistentDomain(forName: dockName) }
+    let s = Dockduo.Settings(defaults: d, dock: dock)
+    let fromSettings = Array(try #require(settingsMenuItem(settings: s, integrations: [], dock: dock).submenu).items.prefix(4))
+    let fromLine = Array(DockLineMenuView(settings: s, dock: dock, update: { .idle }).menu().items.prefix(4))
+    for items in [fromSettings, fromLine] {
+        #expect(items.map { $0.view == nil ? $0.title : "size" } == ["Turn Hiding On", "Position on Screen", "Minimize Using", "size"])
+    }
+    let row = try #require(fromLine[3].view as? NSHostingView<SizeRow>)
+    row.rootView.set(90)
+    #expect(s.sideWidth == 90)
 }

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 // "Impostazioni ›" in fondo ai menu della barra (spec impostazioni-nel-dock §5): quello che non si modifica nella barra.
-// In cima le voci della linea del Dock (dockLineItems: Nascondi, Posizione sullo schermo, Riduci usando), poi Agenti AI ›,
+// In cima le voci della linea del Dock (dockLineItems: Nascondi, Posizione sullo schermo, Riduci usando, Dimensione), poi Agenti AI ›,
 // Suoni ›, Apri al login, la versione con l'aggiornamento, Configurazione iniziale…, Informazioni e Esci. Le azioni sono
 // quelle delle pagine di prima (Account AI, Generali). Il menu è la fotografia di quando si apre; solo lo stato degli hook
 // arriva dopo, letto fuori dal main.
@@ -122,6 +122,20 @@ struct VolumeRow: View {
         .foregroundStyle(Color.primary.opacity(0.55))   // esplicito: il "secondario" nei menu lo spegne la vibrancy
         .padding(.horizontal, menuInset)
         .disabled(!settings.agentSounds)
+    }
+}
+
+// Dimensione: la larghezza della barra come cursore, a numeri interi come il trascinamento della linea.
+struct SizeRow: View {
+    let settings: Settings
+    func set(_ width: Double) { settings.sideWidth = width.rounded() }
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Size")
+            Slider(value: Binding(get: { settings.sideWidth }, set: set), in: sideWidths)
+        }
+        .font(.system(size: 13))
+        .padding(.horizontal, menuInset)
     }
 }
 

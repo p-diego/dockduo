@@ -33,7 +33,7 @@ private let apps = BarItem.widget(.apps), nowPlaying = BarItem.widget(.nowPlayin
 
 @Test func sideSettingsDefaultAndReadBack() throws {
     let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
-    let s = Settings(defaults: d)
+    let s = Settings(defaults: d, dock: nil)
     #expect(s.barSide == .left && s.sideWidth == 52)
     s.barSide = .right; s.sideWidth = 300
     #expect(s.sideWidth == 300)   // la scrittura non limita, la lettura sì

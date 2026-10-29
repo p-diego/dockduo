@@ -250,7 +250,7 @@ private func sectionMenu(in view: NSView, at point: NSPoint) -> NSView? {
 
 // Le voci della linea del Dock di macOS che dockduo ha (autore, 25/10): Nascondi, la posizione sullo schermo senza In basso
 // (la barra sta solo di lato; anche senza AeroSpace, spec app conclusa §2.3) e Riduci usando del Dock di macOS
-// (useMinimizeEffect). Niente Ingrandimento: dockduo non ce l'ha. Le stesse nel menu della linea e in cima a Impostazioni ›,
+// (useMinimizeEffect) e Dimensione (la larghezza della barra, in fondo). Niente Ingrandimento: dockduo non ce l'ha. Le stesse nel menu della linea e in cima a Impostazioni ›,
 // che si apre da ogni punto della barra (autore, 28/10: «DEVE essere uguale»): la linea non c'è con una sezione sola. Dicono
 // lo stato di quando il menu si apre.
 @MainActor func dockLineItems(settings: Settings, dock: UserDefaults?, state: BarState = .shared) -> [NSMenuItem] {
@@ -260,6 +260,7 @@ private func sectionMenu(in view: NSView, at point: NSPoint) -> NSView? {
                 current: settings.barSide) { settings.barSide = $0 },
         choices(String(localized: "Minimize Using"), [(String(localized: "Genie Effect"), "genie"), (String(localized: "Scale Effect"), "scale")],
                 current: effect) { if $0 != effect { useMinimizeEffect($0) } },
+        menuViewItem(NSHostingView(rootView: SizeRow(settings: settings)), height: 28),
     ]
 }
 
@@ -355,7 +356,7 @@ let lifted = 0.4   // l'opacità della sezione trascinata, al suo posto finché 
 // il nostro vetro (rimisurato il 25/10: la prima misura, 46 e 7,5, la contava; gli angoli dal profilo degli angoli in
 // basso, riga per riga, contro il nostro vetro a raggi da 12 a 17). In punti a barra larga 52 (il default), in scala con
 // la barra come le altre pillole: × larghezza/52.
-// shortcut: la grandezza del Dock dell'autore fissata a 31; se la cambia, rimisurare (o leggerla da com.apple.dock).
+// shortcut: le proporzioni sono misurate sul Dock a 31 e scalano con la barra; la barra nuova parte da quel Dock (widthForDockTiles), ma le misure non si rifanno se cambia.
 let dockUnit: CGFloat = 38.0 / 52   // da punti a barra 52 a unità della barra (barScale = larghezza/38)
 let dockWidth = 45 * dockUnit
 let dockRadius = 15.5 * dockUnit
