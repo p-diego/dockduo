@@ -135,7 +135,7 @@ final class SidePanel: NSPanel {
     // Sotto la barra dei menu nativa (24); con la barra dei menu parcheggiata (27.2) sopra le sue finestre (25).
     static let belowMenuBar = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) - 1)
     static let aboveParkedMenuBar = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
-    // Il config di AeroSpace per il margine in alto (outerTopGap): lo rilegge main.swift all'avvio e al cambio di schermi.
+    // Il config di AeroSpace per il margine in alto (gapValue): lo rilegge main.swift all'avvio e al cambio di schermi.
     static var aerospaceConfig = ""
 
     let side: Side
@@ -195,8 +195,8 @@ final class SidePanel: NSPanel {
         let s = Settings.shared
         let display = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
         let visibleTop = screen.frame.maxY - screen.visibleFrame.maxY
-        let top = barTop(strip: max(visibleTop, NSStatusBar.system.thickness), visibleTop: visibleTop,
-                         topGap: outerTopGap(Self.aerospaceConfig, builtIn: CGDisplayIsBuiltin(display) != 0))
+        let topGap = gapEntry("top", in: Self.aerospaceConfig).flatMap { parseGapValue($0.value) }.flatMap { gapValue($0, on: MonitorFacts(screen)) }
+        let top = barTop(strip: max(visibleTop, NSStatusBar.system.thickness), visibleTop: visibleTop, topGap: topGap.map { CGFloat($0) })
         shown = sideBarFrame(screen: screen.frame, side: side, width: s.sideWidth, edge: barEdge, top: top)
         (screenFrame, shared) = (screen.frame, edgeIsShared(screen: screen.frame, side: side, screens: NSScreen.screens.map(\.frame)))
         slide(max(0, slideEnds - ProcessInfo.processInfo.systemUptime))   // uno scorrimento in corso prosegue verso il posto nuovo

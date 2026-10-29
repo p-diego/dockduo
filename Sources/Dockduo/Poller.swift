@@ -145,7 +145,7 @@ final class Poller {
         connecting = true
         DispatchQueue.global().async { [weak self] in
             subscribeAerospace(
-                onStart: { self?.connecting = false; self?.eventsConnected = true; MainActor.assumeIsolated { syncAerospaceGaps() } },
+                onStart: { self?.connecting = false; self?.eventsConnected = true; MainActor.assumeIsolated { syncAerospaceGaps { _ in } } },
                 onEvent: { self?.handle($0) },
                 onEnd: { self?.connecting = false; self?.eventsConnected = false })
         }

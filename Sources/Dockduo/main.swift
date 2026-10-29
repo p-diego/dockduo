@@ -132,7 +132,7 @@ whenChanged({ barShape() + [Settings.shared.autohide] }) {
         SidePanel.adjustedAt = ProcessInfo.processInfo.systemUptime
         sidePanels.flatMap(\.values).filter(\.active).forEach { $0.reveal() }
     }
-    debounce(&gapsSync, after: 0.5) { MainActor.assumeIsolated { syncAerospaceGaps() } }
+    debounce(&gapsSync, after: 0.5) { MainActor.assumeIsolated { syncAerospaceGaps { _ in } } }
 }
 // La prima lettura parte subito, con la richiesta del suo permesso: Automazione per In riproduzione. Lo Stato anche appena
 // spento: il Poller legge batteria e Wi‑Fi solo con lo Stato acceso, quindi si svuotano.
@@ -161,7 +161,7 @@ NotificationCenter.default.addObserver(
 MainActor.assumeIsolated { NowPlaying.start() }   // "In riproduzione": gli annunci di Spotify e Music (NowPlaying.swift)
 poller.start()
 readTopGap()   // prima in coda sulla coda dei gap: la barra nasce già al posto giusto
-MainActor.assumeIsolated { syncAerospaceGaps() }   // a ogni avvio: dopo un'uscita forzata riallinea i lati senza risalvare
+MainActor.assumeIsolated { syncAerospaceGaps { _ in } }   // a ogni avvio: dopo un'uscita forzata riallinea i lati senza risalvare
 // Benvenuto (spec 2026-09-25): al primo avvio della copia installata, e dopo un aggiornamento se un permesso è sparito
 // (dal disco immagine o da una copia tradotta si apre subito, non da qui: showSetupIfNeeded). Da un Timer, come
 // l'avviso di prima: tiene i 2 s di attesa a barra già visibile e gira fuori da un blocco GCD.
