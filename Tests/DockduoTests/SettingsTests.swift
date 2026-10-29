@@ -156,15 +156,18 @@ func forgetSharedSettings() {
 }
 
 // Spec app conclusa §2.1: la prima volta (niente Dock salvati, setup non fatto, niente larghezza) la barra nasce larga come
-// il Dock di macOS (tilesize × 52/31) e si salva subito; senza tilesize resta 52.
+// il Dock di macOS (tilesize × 52/31) e si salva subito; senza tilesize (Dock mai ridimensionato) le caselle di fabbrica,
+// 48. Senza Dock (le prove) resta 52 e non si scrive nulla.
 @Test func aFreshInstallStartsAtTheMacOSDockSize() {
-    for (tilesize, expected) in [(75.0, 126.0), (16.0, 38.0), (nil, 52.0)] {
+    for (tilesize, expected) in [(75.0, 126.0), (16.0, 38.0), (nil, 81.0)] {
         let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
         let (dock, dockName) = fresh(); defer { dock.removePersistentDomain(forName: dockName) }
         if let tilesize { dock.set(tilesize, forKey: "tilesize") }
         #expect(Settings(defaults: d, dock: dock).sideWidth == expected)
-        #expect(d.object(forKey: "dockduo.sideWidth") as? Double == (tilesize == nil ? nil : expected))
+        #expect(d.object(forKey: "dockduo.sideWidth") as? Double == expected)
     }
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    #expect(Settings(defaults: d, dock: nil).sideWidth == 52 && d.object(forKey: "dockduo.sideWidth") == nil)
 }
 
 @Test func anExistingInstallKeepsItsSize() {

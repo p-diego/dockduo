@@ -30,9 +30,9 @@ extension Side {
 let sideWidths: ClosedRange<Double> = 38...150
 
 // La barra larga quanto il Dock di macOS con caselle `tilesize`: il Dock a 31 è la barra a 52 (come dockUnit); numeri interi
-// come il trascinamento della linea.
-func widthForDockTiles(_ tilesize: Double) -> Double {
-    clamped((tilesize * 52 / 31).rounded(), to: sideWidths, default: 52)
+// come il trascinamento della linea. Senza tilesize (un Dock mai ridimensionato) le caselle sono quelle di fabbrica, 48.
+func widthForDockTiles(_ tilesize: Double?) -> Double {
+    clamped(((tilesize ?? 48) * 52 / 31).rounded(), to: sideWidths, default: 52)
 }
 
 // Un numero salvato, riportato nei suoi limiti; assente o non numerico = il default.
@@ -133,10 +133,9 @@ private func firstAIMascotSounds(_ data: Data?) -> (sounds: Bool, volume: Int)? 
         if defaults.object(forKey: "dockduo.agentSounds") == nil { defaults.set(agentSounds, forKey: "dockduo.agentSounds") }
         if defaults.object(forKey: "dockduo.agentVolume") == nil { defaults.set(agentVolume, forKey: "dockduo.agentVolume") }
         // Un'installazione nuova (niente Dock salvati, setup non fatto, niente larghezza) parte larga come il Dock di macOS, e
-        // si salva subito (spec app conclusa §2.1). Altrimenti non si scrive nulla.
-        if docksData == nil, !setupDone, defaults.object(forKey: "dockduo.sideWidth") == nil,
-           let tilesize = dock?.object(forKey: "tilesize") as? Double {
-            sideWidth = widthForDockTiles(tilesize)
+        // si salva subito (spec app conclusa §2.1). Altrimenti, o senza Dock (le prove), non si scrive nulla.
+        if docksData == nil, !setupDone, defaults.object(forKey: "dockduo.sideWidth") == nil, let dock {
+            sideWidth = widthForDockTiles(dock.object(forKey: "tilesize") as? Double)
             defaults.set(sideWidth, forKey: "dockduo.sideWidth")
         }
     }
