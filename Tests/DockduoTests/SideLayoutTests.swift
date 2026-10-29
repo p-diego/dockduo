@@ -106,3 +106,12 @@ private let apps = BarItem.widget(.apps), nowPlaying = BarItem.widget(.nowPlayin
     #expect(barFit(bar: -5, natural: 100) == 0)   // la barra non c'è: niente misure negative
     #expect(barFit(bar: 1000, natural: 3000) == 0.333)
 }
+
+// Il Dock trascinato sta sopra anche le altre zone (si disegnano cima, centro, fondo): la sua zona alza l'indice, le altre no.
+@Test func theDraggedDocksZoneDrawsOnTop() {
+    let top = DockBox(zone: .top, sections: [apps]), mid = DockBox(zone: .middle, sections: [nowPlaying])
+    let docks = [top, mid]
+    #expect(zoneZIndex(zone: .top, dragging: top.id, in: docks) == 1)
+    #expect(zoneZIndex(zone: .middle, dragging: top.id, in: docks) == 0 && zoneZIndex(zone: .bottom, dragging: top.id, in: docks) == 0)
+    #expect(Zone.allCases.allSatisfy { zoneZIndex(zone: $0, dragging: nil, in: docks) == 0 })
+}

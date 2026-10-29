@@ -142,9 +142,8 @@ func dockDragMask(_ source: DockDrop.Source?, _ context: NSDraggingContext) -> N
     var carried: (folders: Bool, files: Bool)?
     // Un trascinamento dal Finder sopra la barra (DockDropDelegate): intanto i Dock con Cartelle o Mensola si vedono anche
     // vuoti, e ci si può lasciare sopra (autore, 25/10). L'entrata lo accende, l'uscita e il rilascio lo spengono.
-    // shortcut: uno per tutte le barre, quindi i Dock vuoti compaiono anche su quelle degli altri schermi; se dà fastidio,
-    // tenere lo schermo della barra (SidePlace.display) invece di un sì.
-    var overBar = false
+    // Lo schermo della barra sotto il rilascio (uno per volta su tutte le barre): i Dock vuoti compaiono solo su quello.
+    var overBar: CGDirectDisplayID?
     // Un trascinamento in corso, di chiunque (il Finder o noi): col tasto premuto e la tavola del trascinamento cambiata da
     // quando era su. Intanto la striscia della barra ha un velo quasi invisibile (SideBarView): macOS fa passare quello che
     // sta sopra i punti trasparenti a chi c'è sotto, i trascinamenti come i clic, e vicino al bordo e agli angoli del Dock
@@ -152,8 +151,8 @@ func dockDragMask(_ source: DockDrop.Source?, _ context: NSDraggingContext) -> N
     private(set) var dragAround = false
     // Un file o una cartella del Finder in mano, ovunque sullo schermo: la mensola vuota mostra già la sua casella, così
     // arrivando sul Dock non cambia più niente sotto il puntatore (autore, 25/10: «quando inizio a draggare un file compare
-    // la drop zone»). Un testo o una voce del Dock no.
-    private(set) var fileDrag = false
+    // la drop zone»). Un testo o una voce del Dock no. Solo sullo schermo dove sta il puntatore (nil = nessuno).
+    private(set) var fileDrag: CGDirectDisplayID?
     private var idleDragCount = NSPasteboard(name: .drag).changeCount
     private var wasPressed = false
     private var pressWatch: Timer?
@@ -177,14 +176,14 @@ func dockDragMask(_ source: DockDrop.Source?, _ context: NSDraggingContext) -> N
     // shortcut: un trascinamento intero fra due battiti (giù, via e su in meno di 0,1 s) lascia il numero di riposo vecchio, e
     // alla pressione dopo il velo (e, se portava file, la casella della mensola) si accende per quella pressione sola; se
     // capita, rileggerlo anche da fermi, una volta al secondo.
-    func dragTick(pressed: Bool, count: () -> Int, files: () -> Bool) {
+    func dragTick(pressed: Bool, count: () -> Int, files: () -> Bool, screen: () -> CGDirectDisplayID? = pointerDisplay) {
         let settled = !pressed && !wasPressed   // su già al battito prima
         if !pressed, wasPressed { idleDragCount = count() }
         wasPressed = pressed
         let now = pressed && count() != idleDragCount
         if now != dragAround { dragAround = now }
         // Un file o una cartella presi fuori da dockduo: la casella della mensola compare subito (autore, 25/10).
-        let fileNow = now && source == nil && files()
+        let fileNow = now && source == nil && files() ? screen() : nil
         if fileNow != fileDrag { fileDrag = fileNow }
         // Un trascinamento la cui uscita si è persa (dropExited mai arrivato): col tasto su e niente in mano non ce n'è
         // nessuno, quindi si spegne quello che spegne leave(). Solo dal secondo battito col tasto su: il tasto si legge già
@@ -192,7 +191,7 @@ func dockDragMask(_ source: DockDrop.Source?, _ context: NSDraggingContext) -> N
         // inserimento: lo spegne lui, a voci arrivate.
         guard settled, source == nil, inserting == 0 else { return }
         if hover != nil { hover = nil }
-        if overBar { overBar = false }
+        if overBar != nil { overBar = nil }
         if sectionHover != nil { sectionHover = nil }
     }
     // La voce del Dock che stai trascinando: una cartella (via dal suo posto finché non la lasci), un file della mensola o, in
@@ -359,7 +358,7 @@ struct DockDropDelegate: DropDelegate {
     // Dal Finder quello che porta si sa solo dopo, fuori dal main: intanto vale come preso.
     func dropEntered(info: DropInfo) {
         drop.carried = nil
-        if drop.source == nil { drop.overBar = true }
+        if drop.source == nil { drop.overBar = display }
         aim(info.location)
         guard drop.source == nil else { return }
         let providers = info.itemProviders(for: [.fileURL])
@@ -401,7 +400,7 @@ struct DockDropDelegate: DropDelegate {
 
     private func leave() {
         drop.hover = nil
-        drop.overBar = false
+        drop.overBar = nil
         drop.sectionHover = nil
     }
 
@@ -467,4 +466,11 @@ private func fileURLs(_ providers: [NSItemProvider]) async -> [URL] {
         if let url, url.isFileURL { urls.append(url) }
     }
     return urls
+}
+
+// Lo schermo sotto il puntatore (l'id che usa SidePlace.display), nil se nessuno.
+func pointerDisplay() -> CGDirectDisplayID? {
+    let p = NSEvent.mouseLocation
+    return NSScreen.screens.first { NSMouseInRect(p, $0.frame, false) }?
+        .deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
 }

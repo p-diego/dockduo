@@ -65,7 +65,9 @@ enum NowPlaying {
     // La prima lettura: chiede al lettore in esecuzione cosa sta suonando (qui scatta la richiesta di Automazione,
     // solo col widget acceso). Fuori dal main: AppleScript è bloccante.
     static func readNow() {
-        for player in Player.allCases where !runningApps(bundle: player.bundle).isEmpty {
+        let running = Player.allCases.filter { !runningApps(bundle: $0.bundle).isEmpty }
+        if running.isEmpty { state.trackRead = true }   // niente da aspettare
+        for player in running {
             let script = """
             tell application "\(player.rawValue)"
                 if player state is playing or player state is paused then
@@ -74,6 +76,7 @@ enum NowPlaying {
             end tell
             """
             runAppleScript(script) { d in
+                state.trackRead = true   // anche se è fallita o non suona niente
                 guard let d, d.numberOfItems == 3 else { return }
                 apply(Track(player: player, title: d.atIndex(1)?.stringValue ?? "", artist: d.atIndex(2)?.stringValue ?? "",
                             playing: d.atIndex(3)?.stringValue == "true"))

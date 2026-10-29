@@ -30,6 +30,7 @@ struct DockBoxView: View {
     var settings = Settings.shared   // cartelle e mensola (le prove ne danno uno loro)
     @Environment(\.barScale) private var scale
     var drop = DockDrop.shared   // il trascinamento della barra (le prove ne danno uno loro)
+    var display: CGDirectDisplayID = 0   // lo schermo della sua barra: i Dock vuoti compaiono solo dove sta il trascinamento
     var hover: DockHover?   // un trascinamento sopra questa capsula (DockDrop.hover; le prove lo danno da qui)
     var editing = Editing.shared   // la modifica (le prove ne danno una loro)
     // La sezione in mano cadrebbe qui: davanti alla sezione `at` (oltre la fine = in fondo), alta `height` (SideBarView).
@@ -62,12 +63,12 @@ struct DockBoxView: View {
         // sono. Lontano dalla barra no. Il posto che si apre per una cartella fa vedere le cartelle anche senza
         // (dock-contenitori §3: conta come piena).
         let hidden = !box.sections.contains(where: shows)
-        let emptyShelf = (hover != nil || drop.fileDrag || drop.overBar && hidden) && shelf.isEmpty
+        let emptyShelf = (hover != nil || drop.fileDrag == display || drop.overBar == display && hidden) && shelf.isEmpty
         // Se la cartella che trascini era tutto quello che il suo Dock mostrava, il suo posto resta aperto anche lontano:
         // il Dock non sparisce, e con lui il rilascio, e la puoi rimettere lì. Così, dal Finder sopra la barra, anche le
         // Cartelle vuote di un Dock senza Mensola.
         let alone = drop.moving != nil && box.hasFolders && hidden
-        let open = alone || (drop.overBar || drop.fileDrag) && hidden && box.hasFolders && !box.hasShelf && folders.isEmpty
+        let open = alone || (drop.overBar == display || drop.fileDrag == display) && hidden && box.hasFolders && !box.hasShelf && folders.isEmpty
         let gap = hover.flatMap(gapBefore) ?? (open ? foldersEnd : nil)
         // Le sezioni che si vedono, e se il Dock si vede: la regola è questa sola (la barra non ne ha un'altra). In modifica
         // tutte: quella senza niente da mostrare è la sua casella vuota.
@@ -101,7 +102,7 @@ struct DockBoxView: View {
             .pill(padding: 7 * dockUnit, dock: true)
             .overlay(MenuAnchor { DockMenuView() })   // il tasto destro dove nessuna sezione ha un suo menu
             // Il Dock che sparisce sotto un trascinamento non resta acceso.
-            .onDisappear { if hover != nil { drop.hover = nil; drop.overBar = false } }
+            .onDisappear { if hover != nil { drop.hover = nil; drop.overBar = nil } }
             // Larga 45 al centro della barra da 52 starebbe a 5,5 dal bordo dello schermo (2 + 3,5); quella di macOS è a 5:
             // mezzo punto verso il bordo.
             .offset(x: (mirrored ? 0.5 : -0.5) * dockUnit * scale)
@@ -187,13 +188,15 @@ struct DockBoxView: View {
 // fuori dalla modifica, se nessuna sezione di nessun Dock si vede (nessun Dock, o solo sezioni vuote; lo Stato acceso si vede
 // sempre), al centro c'è la capsula vuota del Dock (EmptyBarCapsule). La regola è quella dei Dock (barItemHasContent), con
 // due attese che vengono dai dati, non dal tempo: all'avvio la barra deve aver letto (le app al primo giro del Poller, da cui
-// i rapporti degli spazi non sono mai vuoti; i segnalibri di cartelle e mensola risolti), così la capsula non compare e
+// i rapporti degli spazi non sono mai vuoti; i segnalibri di cartelle e mensola risolti; la prima lettura di In riproduzione, che
+// è AppleScript e arriva dopo), così la capsula non compare e
 // scompare mentre le sezioni arrivano; e trascinando un file (dal Finder o dal Dock) un Dock con Cartelle o Mensola mostra
 // dove lasciarlo (DockBoxView), quindi lei gli lascia il posto. In modifica si vedono le sezioni vuote: lei no.
 @MainActor func emptyBarCapsuleShows(docks: [DockBox], state: BarState, settings: Settings = .shared, drop: DockDrop = .shared,
-                                     editing: Editing? = nil) -> Bool {
+                                     display: CGDirectDisplayID, editing: Editing? = nil) -> Bool {
     let read = !state.reports.isEmpty && !(settings.dockFolders + settings.dockShelf).contains { $0.url == nil && !$0.hidden }
-    let dropping = (drop.source != nil || drop.fileDrag || drop.overBar) && docks.contains { $0.hasFolders || $0.hasShelf }
+        && (state.trackRead || !settings.isOn(.nowPlaying))
+    let dropping = (drop.source != nil || drop.fileDrag == display || drop.overBar == display) && docks.contains { $0.hasFolders || $0.hasShelf }
     return read && !dropping && !(editing ?? .shared).on
         && !docks.contains { $0.sections.contains { barItemHasContent($0, state: state, settings: settings, drop: drop) } }
 }

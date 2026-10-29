@@ -24,6 +24,7 @@ final class BarState {
     var battery: Battery?
     var wifi: WiFi?       // nil = nessuna interfaccia Wi-Fi, o l'elemento di stato spento
     var track: Track?        // "In riproduzione" (NowPlaying.swift); nil = niente o widget spento
+    var trackRead = false    // la prima lettura di In riproduzione è tornata (riuscita o no): prima la barra non sa se la capsula vuota va
     var artwork: NSImage?    // la copertina della traccia, quando arriva
     var sessions: [String: AgentSession] = [:]   // sessioni di agenti AI per session_id (AgentServer)
 }

@@ -271,8 +271,9 @@ private final class EditPanel: NSPanel, EditWindow {}   // come la galleria (Tas
     authorDock(s)
     s.docks[0].sections.removeFirst()   // tolte le App aperte: Cartelle, Mensola e In riproduzione, tutte vuote
     let state = BarState(), drop = DockDrop(settings: s), editing = Editing()
-    func shows() -> Bool { emptyBarCapsuleShows(docks: s.docks, state: state, settings: s, drop: drop, editing: editing) }
+    func shows() -> Bool { emptyBarCapsuleShows(docks: s.docks, state: state, settings: s, drop: drop, display: 1, editing: editing) }
     #expect(!shows())   // la barra non ha ancora letto
+    state.trackRead = true   // In riproduzione ha già letto: lettore fermo, nessun brano
     state.reports = [SpaceReport(workspace: Workspace(name: "1", isFocused: true), apps: [])]
     #expect(shows())
     s.docks = []
@@ -292,7 +293,7 @@ private final class EditPanel: NSPanel, EditWindow {}   // come la galleria (Tas
     #expect(!shows())
     s.dockFolders[0].hidden = true   // risolto, non si raggiunge (disco staccato, rete muta): non si vede
     #expect(shows())
-    drop.overBar = true   // un file dal Finder sopra la barra: il Dock con Cartelle e Mensola mostra dove lasciarlo
+    drop.overBar = 1   // un file dal Finder sopra la barra: il Dock con Cartelle e Mensola mostra dove lasciarlo
     #expect(!shows())
     s.docks = [DockBox(zone: .middle, sections: w(.nowPlaying))]   // nessun Dock che lo prende: la capsula resta
     #expect(shows())
@@ -335,7 +336,7 @@ private final class EditPanel: NSPanel, EditWindow {}   // come la galleria (Tas
                 DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: s, editing: editing)
                     .background { if !box.isStatus { glass } }
             }
-            if z == .middle, emptyBarCapsuleShows(docks: s.docks, state: state, settings: s, drop: DockDrop(settings: s), editing: editing) {
+            if z == .middle, emptyBarCapsuleShows(docks: s.docks, state: state, settings: s, drop: DockDrop(settings: s), display: 1, editing: editing) {
                 EmptyBarCapsule(display: nil, mirrored: false, editing: editing).background { glass }
             }
             if z == .bottom, editing.on { EditDoneButton() }
@@ -367,4 +368,17 @@ private final class EditPanel: NSPanel, EditWindow {}   // come la galleria (Tas
         try await shot(HStack(spacing: 0) { bar(off, dark: dark); bar(on, dark: dark) }, backdrop: backdrop(dark),
                        to: out.appendingPathComponent("\(file).png"))
     }
+}
+
+// All'avvio In riproduzione si legge con AppleScript e arriva dopo: finché non è tornata la lettura la capsula vuota non
+// compare (poi sparirebbe con la nota); tornata e senza brano (lettore fermo), c'è.
+@MainActor @Test func theEmptyCapsuleWaitsForNowPlaying() {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let s = Dockduo.Settings(defaults: d), state = BarState(), drop = DockDrop(settings: s)
+    s.docks = [DockBox(zone: .middle, sections: w(.nowPlaying))]
+    state.reports = [SpaceReport(workspace: Workspace(name: "1", isFocused: true), apps: [])]
+    func shows() -> Bool { emptyBarCapsuleShows(docks: s.docks, state: state, settings: s, drop: drop, display: 1, editing: Editing()) }
+    #expect(!shows())
+    state.trackRead = true
+    #expect(shows())
 }

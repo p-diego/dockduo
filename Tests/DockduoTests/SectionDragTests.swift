@@ -174,7 +174,7 @@ private func look(_ docks: [DockBox]) -> [[[BarItem]]] { Zone.allCases.map { z i
     #expect(!drop.dragAround)
     drop.source = .section(.widget(.apps))   // lift(section:) scrive la tavola
     tick(true, 2)
-    #expect(drop.dragAround && !drop.fileDrag)
+    #expect(drop.dragAround && drop.fileDrag == nil)
     drop.source = nil
     tick(false, 2)
     #expect(!drop.dragAround)
@@ -202,8 +202,8 @@ private func look(_ docks: [DockBox]) -> [[[BarItem]]] { Zone.allCases.map { z i
     func tick(_ pressed: Bool) { drop.dragTick(pressed: pressed, count: { 7 }, files: { true }) }
     let hover = DockHover(dock: UUID(), display: 1, spot: .shelf, folders: false)
     let section = SectionHover(target: .newDock(zone: .top, index: 0), display: 1)
-    func lit() -> Bool { drop.hover == hover && drop.overBar && drop.sectionHover == section }
-    (drop.hover, drop.overBar, drop.sectionHover) = (hover, true, section)
+    func lit() -> Bool { drop.hover == hover && drop.overBar != nil && drop.sectionHover == section }
+    (drop.hover, drop.overBar, drop.sectionHover) = (hover, 1, section)
     tick(true)
     #expect(lit())
     tick(false)   // la risalita
@@ -217,7 +217,7 @@ private func look(_ docks: [DockBox]) -> [[[BarItem]]] { Zone.allCases.map { z i
     #expect(lit())
     drop.inserting = 0
     tick(false)
-    #expect(drop.hover == nil && !drop.overBar && drop.sectionHover == nil)
+    #expect(drop.hover == nil && drop.overBar == nil && drop.sectionHover == nil)
 }
 
 // Dove cadrebbe la sezione in mano il Dock apre il suo posto: lei e lo spazio della sua linea; senza, il Dock è com'era.

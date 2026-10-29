@@ -76,7 +76,7 @@ struct SideBarView: View {
         let column = docks.filter { $0.zone == zone }
         let room: Int? = if case .newDock(zone, let at)? = sectionHover?.target { at } else { nil }
         let space = Color.clear.frame(height: roomHeight(scale) + 14 * dockUnit * scale).transition(.opacity)
-        let empty = zone == .middle && side == settings.barSide && emptyBarCapsuleShows(docks: docks, state: state)
+        let empty = zone == .middle && side == settings.barSide && emptyBarCapsuleShows(docks: docks, state: state, display: place.display)
         let doneZone = Zone.allCases.last { z in docks.contains { $0.zone == z } } ?? .middle
         return VStack(spacing: 6 * scale) {
             ForEach(column) { box in
@@ -90,6 +90,8 @@ struct SideBarView: View {
         .animation(.smooth(duration: 0.3), value: Editing.shared.on)
         .animation(.smooth(duration: 0.3), value: room)
         .animation(.smooth(duration: 0.3), value: empty)
+        // Il Dock trascinato sta sopra anche le altre zone, che si disegnano dopo la sua (la cima, il centro, il fondo).
+        .zIndex(zoneZIndex(zone: zone, dragging: current?.id, in: docks))
     }
 
     // Un Dock: registra dove sta (solo se si vede) e dove le sue voci, e, se è quello trascinato, il suo scostamento
@@ -99,7 +101,7 @@ struct SideBarView: View {
         DockBoxView(box: box, state: state, mirrored: side == .right, icons: icons.hooks(state, thickness: settings.sideWidth),
                     onFrame: { frames[box.id] = $0; rest(box.id, $0) },
                     onTile: rest, onSection: { item, frame in if !frozen { sectionFrames[item] = frame } },
-                    hover: hover?.dock == box.id ? hover : nil, room: room(in: box, scale))
+                    display: place.display, hover: hover?.dock == box.id ? hover : nil, room: room(in: box, scale))
             .inBar(grab: current?.id == box.id ? grab : nil, pointer: (current?.point.y ?? 0) - place.bar.minY)
     }
 
@@ -212,8 +214,6 @@ struct SideBarView: View {
 extension View {
     func inBar(grab: CGFloat?, pointer: CGFloat) -> some View {
         visualEffect { effect, proxy in effect.offset(y: grab.map { pointer - $0 - proxy.frame(in: .named("bar")).minY } ?? 0) }
-            // shortcut: zIndex vale solo dentro la zona, in una barra affollata il Dock trascinato in cima può passare sotto
-            // quelli del centro; alzare la sua zona se capita.
             .zIndex(grab == nil ? 0 : 1)
             // Quello trascinato cambia posto senza animazione (resta incollato al puntatore); gli altri scivolano.
             .transaction { if grab != nil { $0.animation = nil } }
@@ -289,4 +289,9 @@ struct SideLook: ViewModifier {
             .environment(\.palette, palette)
             .animation(.smooth(duration: 0.3), value: palette)
     }
+}
+
+// La zona che contiene il Dock trascinato sta sopra le altre: zIndex dentro la zona non basta, le zone sono viste sorelle.
+func zoneZIndex(zone: Zone, dragging: UUID?, in docks: [DockBox]) -> Double {
+    docks.contains { $0.id == dragging && $0.zone == zone } ? 1 : 0
 }

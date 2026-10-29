@@ -52,12 +52,12 @@ private func threeApps() -> [AppEntry] {
 
 // Un Dock con quelle sezioni a barra 52, le app nello stato della barra, cartelle e mensola da `settings` (una suite sua).
 @MainActor private func dockView(_ sections: [WidgetID], apps: [AppEntry] = [], settings: Dockduo.Settings, state: BarState = BarState(),
-                                 hover: DockHover? = nil, drop: DockDrop = .shared) -> NSHostingView<some View> {
+                                 hover: DockHover? = nil, drop: DockDrop = .shared, display: CGDirectDisplayID = 1) -> NSHostingView<some View> {
     state.dock = apps
     let icons = IconDragHooks(target: nil, dragging: nil, onDrag: { _, _, _, _ in }, onDrop: { _ in }, pillFrame: { _, _ in })
     let box = DockBox(zone: .middle, sections: sections.map(BarItem.widget))
     return NSHostingView(rootView: DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: settings, drop: drop,
-                                               hover: hover)
+                                               display: display, hover: hover)
         .environment(\.barScale, 52.0 / 38))
 }
 
@@ -224,7 +224,7 @@ private func threeApps() -> [AppEntry] {
     func height(_ sections: [WidgetID]) -> CGFloat { dockView(sections, settings: s, drop: drop).fittingSize.height }
     let empty: [[WidgetID]] = [[.shelf], [.folders], [.folders, .shelf]], one: CGFloat = 7 + 31 + 7
     #expect(empty.allSatisfy { height($0) == 0 })
-    drop.overBar = true
+    drop.overBar = 1
     #expect(empty.allSatisfy { abs(height($0) - one) < 0.25 })   // una casella sola: la mensola, o il posto delle cartelle
     #expect(height([]) == 0 && height([.nowPlaying]) == 0)
     // Un Dock che si vede già resta com'è: la casella della mensola solo trascinandoci sopra (spec dock §3).
@@ -487,4 +487,19 @@ private func threeApps() -> [AppEntry] {
     rep.draw(in: all, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: false, hints: nil)
     NSGraphicsContext.restoreGraphicsState()
     try #require(flat.representation(using: .png, properties: [:])).write(to: url)
+}
+
+// I Dock vuoti compaiono solo sullo schermo dove sta il trascinamento dal Finder (A = 1), non sulle barre degli altri (B = 2);
+// spostando il puntatore sull'altro schermo si scambiano.
+@MainActor @Test func emptyDocksShowOnlyOnThePointersScreen() {
+    _ = NSApplication.shared
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let s = Dockduo.Settings(defaults: d), drop = DockDrop(settings: s)
+    func height(_ display: CGDirectDisplayID) -> CGFloat { dockView([.shelf], settings: s, drop: drop, display: display).fittingSize.height }
+    func drag(on display: CGDirectDisplayID) { drop.dragTick(pressed: true, count: { 9 }, files: { true }, screen: { display }) }
+    drop.dragTick(pressed: false, count: { 1 }, files: { true }, screen: { 1 })   // il numero di riposo
+    drag(on: 1)
+    #expect(height(1) > 0 && height(2) == 0)
+    drag(on: 2)
+    #expect(height(1) == 0 && height(2) > 0)
 }
