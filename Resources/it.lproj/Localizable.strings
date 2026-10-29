@@ -121,6 +121,11 @@
 "Position on Screen" = "Posizione sullo schermo";
 "Left" = "A sinistra";
 "Right" = "A destra";
+"Bottom" = "In basso";
+"The macOS Dock is here" = "Qui c'è il Dock di macOS";
+"Move the macOS Dock Left" = "Sposta il Dock di macOS a sinistra";
+"Move the macOS Dock Right" = "Sposta il Dock di macOS a destra";
+"Move the macOS Dock to the Bottom" = "Sposta il Dock di macOS in basso";
 "Minimize Using" = "Riduci usando";
 "Size" = "Dimensione";
 "Genie Effect" = "Effetto genio";

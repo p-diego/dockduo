@@ -27,7 +27,7 @@ MainActor.assumeIsolated {
 
 // Per schermo una barra sul lato scelto (il menu della linea). Ogni lato nasce la prima volta che serve, poi si sposta soltanto. I
 // pannelli non si chiudono mai: chiudere o nascondere un pannello più vecchio spegne la pressione del glass interattivo in
-// quelli creati dopo (misurato su macOS 27.0, vedi ANALISI.md). Quello di uno schermo sparito o dell'altro lato resta
+// quelli creati dopo (misurato su macOS 27.0, vedi ANALISI.md). Quello di uno schermo sparito o degli altri lati resta
 // com'è, solo spento (alpha 0, applyBarSide).
 var sidePanels: [[Side: SidePanel]] = []
 func showPanels() {

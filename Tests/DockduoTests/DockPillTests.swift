@@ -379,12 +379,12 @@ private func threeApps() -> [AppEntry] {
     }
     var menu = shown()
     #expect(menu.titles == ["Turn Hiding On", "Position on Screen", "Minimize Using", "NSMenuItem", "", "Edit Dock…", "Settings"])
-    #expect(menu.sides.map(\.title) == ["Left", "Right"] && menu.sides.map(\.state) == [.on, .off])
+    #expect(menu.sides.map(\.state) == [.on, .off, .off, .off, .off])
     #expect(menu.effects.map(\.title) == ["Genie Effect", "Scale Effect"] && menu.effects.map(\.state) == [.on, .off])
     s.autohide = true; s.barSide = .right; dock.set("scale", forKey: "mineffect")
     menu = shown()
     #expect(menu.hiding.title == "Turn Hiding Off")
-    #expect(menu.sides.map(\.state) == [.off, .on] && menu.effects.map(\.state) == [.off, .on])
+    #expect(menu.sides.map(\.state) == [.off, .off, .off, .off, .on] && menu.effects.map(\.state) == [.off, .on])
     func choose(_ item: NSMenuItem) { _ = (item.target as? NSObject)?.perform(item.action, with: item) }
     choose(menu.hiding)
     choose(menu.sides[0])
@@ -397,9 +397,71 @@ private func threeApps() -> [AppEntry] {
     let s = Dockduo.Settings(defaults: d), state = BarState()
     state.spaceProblem = .notInstalled
     let sides = dockLineItems(settings: s, dock: nil, state: state).first { $0.title == "Position on Screen" }?.submenu?.items ?? []
-    #expect(sides.map(\.title) == ["Left", "Right"] && sides.allSatisfy(\.isEnabled))
+    #expect(sides.map(\.title) == ["Left", "Bottom", "The macOS Dock is here", "Move the macOS Dock Right", "Right"])
     _ = (sides.last?.target as? NSObject)?.perform(sides.last?.action, with: sides.last)
     #expect(s.barSide == .right)
+}
+
+@MainActor private func positionItems(_ s: Dockduo.Settings, dock: UserDefaults?, moveDock: @escaping (Side) -> Void = { _ in }) -> [NSMenuItem] {
+    dockLineItems(settings: s, dock: dock, state: BarState(), moveDock: moveDock).first { $0.title == "Position on Screen" }?.submenu?.items ?? []
+}
+
+// Posizione sullo schermo ha i tre lati nell'ordine del menu di macOS (spec app conclusa §3.1).
+@MainActor @Test func positionHasThreeSidesInMacOSOrder() {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dock, dockName) = fresh(); defer { dock.removePersistentDomain(forName: dockName) }
+    dock.set("left", forKey: "orientation")
+    let s = Dockduo.Settings(defaults: d); s.barSide = .right
+    let titles = positionItems(s, dock: dock).map(\.title).filter { ["Left", "Bottom", "Right"].contains($0) }
+    #expect(titles == ["Left", "Bottom", "Right"])
+}
+
+// Il lato del Dock di macOS è spento, con la riga grigia e la voce che lo sposta sul primo lato libero (spec §3.4); se la barra
+// è già lì, il lato resta spuntato e spento con le stesse righe. La voce dà il lato a moveDock: le prove non toccano il Dock vero.
+@MainActor @Test func theMacOSDocksSideIsBlocked() throws {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dock, dockName) = fresh(); defer { dock.removePersistentDomain(forName: dockName) }
+    let s = Dockduo.Settings(defaults: d)   // barra a sinistra
+    var moved: [Side] = []
+    var items = positionItems(s, dock: dock) { moved.append($0) }   // orientation mancante = in basso
+    #expect(items.map(\.title) == ["Left", "Bottom", "The macOS Dock is here", "Move the macOS Dock Right", "Right"])
+    #expect(items.map(\.isEnabled) == [true, false, false, true, true])
+    _ = (items[3].target as? NSObject)?.perform(items[3].action, with: items[3])
+    #expect(moved == [.right])
+    dock.set("left", forKey: "orientation")
+    items = positionItems(s, dock: dock) { moved.append($0) }
+    #expect(items.map(\.title) == ["Left", "The macOS Dock is here", "Move the macOS Dock to the Bottom", "Bottom", "Right"])
+    #expect(items[0].state == .on && !items[0].isEnabled && items[2].isEnabled)
+    _ = (items[2].target as? NSObject)?.perform(items[2].action, with: items[2])
+    #expect(moved == [.right, .bottom])
+    #expect(freeSideForMacDock(chosen: .bottom, current: .left) == .right && freeSideForMacDock(chosen: .left, current: .left) == .bottom)
+    #expect(macDockSide(dock) == .left && macDockSide(nil) == .bottom)
+}
+
+// Review Focus 3: la barra in basso e di nuovo di lato non perde nulla (Dock, larghezza, margini dell'utente di AeroSpace).
+@MainActor @Test func goingToTheBottomAndBackKeepsEverything() throws {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let s = Dockduo.Settings(defaults: d)
+    let (docks, width) = (s.docks, s.sideWidth)
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let file = dir.appendingPathComponent("a.toml")
+    let mine = "gaps.outer.left = 5\ngaps.outer.bottom = 7\n"
+    try mine.write(to: file, atomically: true, encoding: .utf8)
+    func gap(_ side: Side) -> String? {
+        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        return text.split(separator: "\n").first { $0.hasPrefix("gaps.outer.\(side.rawValue) =") }.map(String.init)
+    }
+    func go(_ side: Side) {
+        s.barSide = side
+        #expect(writeGaps(side: side, edge: 2, width: 60, autohide: false, to: file, defaults: d, reload: { _ in true }) == nil)
+    }
+    go(.bottom)
+    #expect(gap(.bottom)?.hasPrefix("gaps.outer.bottom = 69") == true)   // 7 + 2 + 60
+    go(.left)
+    #expect(gap(.left)?.hasPrefix("gaps.outer.left = 67") == true && gap(.bottom)?.hasPrefix("gaps.outer.bottom = 7") == true)
+    #expect(s.docks == docks && s.sideWidth == width && s.barSide == .left)
 }
 
 // L'aggiornamento in cima al menu della linea, staccato dalle altre voci (spec dock-degli-agenti §3: era in cima al menu

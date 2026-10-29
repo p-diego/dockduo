@@ -253,16 +253,16 @@ private func sectionMenu(in view: NSView, at point: NSPoint) -> NSView? {
     return view.subviews.lazy.compactMap { sectionMenu(in: $0, at: point) }.first
 }
 
-// Le voci della linea del Dock di macOS che dockduo ha (autore, 25/10): Nascondi, la posizione sullo schermo senza In basso
-// (la barra sta solo di lato; anche senza AeroSpace, spec app conclusa §2.3) e Riduci usando del Dock di macOS
+// Le voci della linea del Dock di macOS che dockduo ha (autore, 25/10): Nascondi, la posizione sullo schermo (a sinistra, in
+// basso, a destra come nel menu di macOS; anche senza AeroSpace, spec app conclusa §2.3) e Riduci usando del Dock di macOS
 // (useMinimizeEffect) e Dimensione (la larghezza della barra, in fondo). Niente Ingrandimento: dockduo non ce l'ha. Le stesse nel menu della linea e in cima a Impostazioni ›,
 // che si apre da ogni punto della barra (autore, 28/10: «DEVE essere uguale»): la linea non c'è con una sezione sola. Dicono
 // lo stato di quando il menu si apre.
-@MainActor func dockLineItems(settings: Settings, dock: UserDefaults?, state: BarState = .shared) -> [NSMenuItem] {
+@MainActor func dockLineItems(settings: Settings, dock: UserDefaults?, state: BarState = .shared,
+                              moveDock: @escaping (Side) -> Void = moveMacDock) -> [NSMenuItem] {
     let effect = dock.map(minimizeEffect) ?? "genie"
     return hidingItems(settings, state) + [
-        choices(String(localized: "Position on Screen"), [(String(localized: "Left"), Side.left), (String(localized: "Right"), .right)],
-                current: settings.barSide) { settings.barSide = $0 },
+        positionItem(settings, dockSide: dock.map(macDockSide) ?? .bottom, moveDock: moveDock),
         choices(String(localized: "Minimize Using"), [(String(localized: "Genie Effect"), "genie"), (String(localized: "Scale Effect"), "scale")],
                 current: effect) { if $0 != effect { useMinimizeEffect($0) } },
         menuViewItem(NSHostingView(rootView: SizeRow(settings: settings)), height: 28),
@@ -285,6 +285,30 @@ private func sectionMenu(in view: NSView, at point: NSPoint) -> NSView? {
     let lines = [greyLine(String(localized: "Hidden: no space reserved"), on: true), greyLine(reason)]
     guard problem == .noUserConfig else { return lines }
     return lines + [ActionItem(String(localized: "Create AeroSpace Config")) { createAerospaceConfigAndSync() }]
+}
+
+// Posizione sullo schermo: i tre lati nell'ordine del menu di macOS. Il lato del Dock di macOS è spento (la barra non gli si
+// sovrappone), con una riga grigia e la voce che sposta il Dock di macOS sul primo lato libero (spec §3.4, «blocca e offre lo
+// spostamento»). Se la barra è già lì (il Dock di macOS è stato spostato) il lato resta spuntato e spento, con le stesse righe.
+@MainActor private func positionItem(_ settings: Settings, dockSide: Side, moveDock: @escaping (Side) -> Void) -> NSMenuItem {
+    let submenu = NSMenu()
+    submenu.autoenablesItems = false
+    let names: [(Side, String)] = [(.left, String(localized: "Left")), (.bottom, String(localized: "Bottom")), (.right, String(localized: "Right"))]
+    for (side, name) in names {
+        let item = ActionItem(name, on: side == settings.barSide) { settings.barSide = side }
+        submenu.addItem(item)
+        guard side == dockSide else { continue }
+        item.isEnabled = false
+        let to = freeSideForMacDock(chosen: side, current: settings.barSide)
+        let move = switch to {
+        case .left: String(localized: "Move the macOS Dock Left")
+        case .right: String(localized: "Move the macOS Dock Right")
+        case .bottom: String(localized: "Move the macOS Dock to the Bottom")
+        }
+        submenu.addItem(greyLine(String(localized: "The macOS Dock is here")))
+        submenu.addItem(ActionItem(move) { moveDock(to) })
+    }
+    return submenuItem(String(localized: "Position on Screen"), submenu)
 }
 
 // Una voce col suo sottomenu: una scelta per valore, col segno su quella di adesso.
@@ -437,6 +461,21 @@ func lineDragWidth(start: Double, scale: CGFloat, delta: CGSize, side: Side) -> 
 
 // Riduci usando del Dock di macOS: l'effetto scelto in com.apple.dock (mineffect); senza, il genio, quello di fabbrica.
 func minimizeEffect(_ dock: UserDefaults) -> String { dock.string(forKey: "mineffect") ?? "genie" }
+
+// Il lato dove sta il Dock di macOS (orientation in com.apple.dock); senza, in basso, quello di fabbrica.
+func macDockSide(_ dock: UserDefaults?) -> Side { dock?.string(forKey: "orientation").flatMap(Side.init(rawValue:)) ?? .bottom }
+
+// Il lato dove spostare il Dock di macOS per fare posto: il primo di in basso, a sinistra, a destra che non sia né quello
+// scelto né quello della barra.
+func freeSideForMacDock(chosen: Side, current: Side) -> Side { [.bottom, .left, .right].first { $0 != chosen && $0 != current }! }
+
+// Come useMinimizeEffect: scrive l'orientamento del Dock di macOS e lo fa ripartire, fuori dal main. Solo dal menu.
+func moveMacDock(to side: Side) {
+    DispatchQueue.global(qos: .userInitiated).async {
+        guard shell("/usr/bin/defaults", ["write", "com.apple.dock", "orientation", "-string", side.rawValue]) != nil else { return }
+        _ = shell("/usr/bin/killall", ["Dock"])
+    }
+}
 
 // Sceglierlo cambia l'impostazione del Dock di macOS e lo fa ripartire, perché la legga (autore, 25/10: «Sì, la tengo»).
 // Fuori dal main (shell aspetta); se la scrittura non riesce il Dock resta com'è. Solo dal menu: le prove non la chiamano.
