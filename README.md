@@ -1,18 +1,25 @@
 # dockduo
 
-dockduo is a vertical bar at the left or right edge of the screen, like the side strip of the iPhone Duo: your
-AeroSpace workspaces, a Dock of the open apps with their badges, widgets (Wi-Fi, battery, now playing,
-clock…) and the state of your AI agents (Claude Code, Codex) on their apps. It runs next to
+dockduo is a bar at the left or right edge of the screen, like the side strip of the iPhone Duo, or at the bottom like
+the macOS Dock: your AeroSpace workspaces, a Dock of the open apps with their badges, widgets (Wi-Fi, battery, now
+playing, clock…) and the state of your AI agents (Claude Code, Codex) on their apps. It runs next to
 [Siigil](https://github.com/p-diego/siigil) without overlapping it.
 
 dockduo is a fork of Siigil: it keeps only the side bar.
 
+Settings › and the separator line's menu choose the edge (Left, Bottom, Right) and the size. The edge where the macOS
+Dock sits is greyed out, with an item that moves the macOS Dock to a free edge. A new bar starts at the size of the
+macOS Dock.
+
 ## Requirements
 
 - macOS 26 or later.
-- [AeroSpace](https://github.com/nikitabobko/AeroSpace) (`brew install --cask nikitabobko/tap/aerospace`). dockduo
-  rewrites only `gaps.outer.left` and `gaps.outer.right` in the AeroSpace config, to make room for the bar, and puts
-  them back when you quit it.
+- [AeroSpace](https://github.com/nikitabobko/AeroSpace) (`brew install --cask nikitabobko/tap/aerospace`) is
+  recommended. dockduo widens only the outer gap on the bar's edge (`gaps.outer.left`, `.right` or `.bottom`) by the
+  bar's size, on top of your own values (per-monitor values included), and puts them back when you quit it.
+  Without AeroSpace, or when AeroSpace has no config file of its own or its gaps are in a form dockduo can't edit,
+  nothing reserves room for the bar: it hides at the edge and slides out when you point there, and the menu says why.
+  "Create AeroSpace Config" copies AeroSpace's default config to `~/.aerospace.toml` when there is none.
 
 ## Install
 
