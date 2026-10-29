@@ -41,8 +41,9 @@ private func scan(_ line: Substring) -> (code: Substring, depth: Int) {
     return (line, depth)
 }
 
-// La voce non commentata di gaps.outer.<key>, con tutte le sue righe quando un elenco [ va a capo.
-func gapEntry(_ key: String, in toml: String) -> GapEntry? {
+// La voce non commentata di gaps.outer.<key>, con tutte le sue righe quando un elenco [ va a capo; `closed` falso se le
+// parentesi non si chiudono prima della fine del file.
+private func scanEntry(_ key: String, in toml: String) -> (entry: GapEntry, closed: Bool)? {
     let lines = toml.components(separatedBy: "\n")
     guard let first = lines.firstIndex(where: { assigns($0.trimmingCharacters(in: .whitespaces), "gaps.outer.\(key)") }) else { return nil }
     var parts: [String] = [], depth = 0, end = first
@@ -53,7 +54,13 @@ func gapEntry(_ key: String, in toml: String) -> GapEntry? {
         (depth, end) = (depth + open, i)
         if depth <= 0 { break }
     }
-    return GapEntry(lines: first..<end + 1, value: parts.filter { !$0.isEmpty }.joined(separator: " "))
+    return (GapEntry(lines: first..<end + 1, value: parts.filter { !$0.isEmpty }.joined(separator: " ")), depth <= 0)
+}
+
+// La voce di gaps.outer.<key>. Una che non si chiude fino alla fine del file non è una voce ma una forma sconosciuta
+// (unknownGapsForm): con dentro il resto del file, riscriverla lo cancellerebbe.
+func gapEntry(_ key: String, in toml: String) -> GapEntry? {
+    scanEntry(key, in: toml).flatMap { $0.closed ? $0.entry : nil }
 }
 
 // Le righe intere della voce, com'erano nel file; "" se manca.
@@ -174,8 +181,8 @@ func writeGaps(side: Side, edge: Int, width: Int, autohide: Bool, to file: URL, 
                reload: ((_ dryRun: Bool) -> Bool)?) -> SpaceProblem? {
     let real = file.resolvingSymlinksInPath()
     guard !insideApp(real) else { return .noUserConfig }
-    guard let old = try? String(contentsOf: real, encoding: .utf8), !usesGapsTable(old) else {
-        logger.error("gaps AeroSpace: config illeggibile o margini in una tabella, non si tocca")
+    guard let old = try? String(contentsOf: real, encoding: .utf8), !unknownGapsForm(old) else {
+        logger.error("gaps AeroSpace: config illeggibile o margini in una forma sconosciuta, non si tocca")
         return .unknownForm
     }
     let before = defaults.dictionary(forKey: gapsKey) as? [String: String]
@@ -200,19 +207,20 @@ func writeGaps(side: Side, edge: Int, width: Int, autohide: Bool, to file: URL, 
     return apply(withGapLines(old, lines), old: old, real: real, reload: reload) ? nil : .rejected
 }
 
-// I margini in una tabella: [gaps] o [gaps.…] (anche con un commento dopo), con sotto righe che vorrebbero dire altro, o in
-// una riga sola (gaps = {…}, gaps.outer = {…}). La scansione per righe non li sa modificare.
-func usesGapsTable(_ toml: String) -> Bool {
+// Margini che la scansione per righe non sa modificare, e il file non si tocca: in una tabella, [gaps] o [gaps.…] (anche
+// con un commento dopo, con sotto righe che vorrebbero dire altro) o in una riga sola (gaps = {…}, gaps.outer = {…}); o una
+// voce, anche quella in alto che si terrebbe dentro i lati, che apre una parentesi e non la chiude più (gapEntry).
+func unknownGapsForm(_ toml: String) -> Bool {
     toml.components(separatedBy: "\n").contains { l in
         let t = l.trimmingCharacters(in: .whitespaces)
         return t.hasPrefix("[gaps") || assigns(t, "gaps") || assigns(t, "gaps.outer")
-    }
+    } || (sideGapKeys + ["top"]).contains { scanEntry($0, in: toml)?.closed == false }
 }
 
 func restoreGaps(to file: URL, defaults: UserDefaults, reload: ((Bool) -> Bool)?) -> Bool {
     guard let saved = defaults.dictionary(forKey: gapsKey) as? [String: String] else { return true }
     let real = file.resolvingSymlinksInPath()
-    guard !insideApp(real), let old = try? String(contentsOf: real, encoding: .utf8), !usesGapsTable(old) else { return false }
+    guard !insideApp(real), let old = try? String(contentsOf: real, encoding: .utf8), !unknownGapsForm(old) else { return false }
     let new = withGapLines(old, savedLines(saved))
     // Le righe di prima sono dell'utente e funzionavano già: niente prova (dry-run), che con AeroSpace muto le lascerebbe
     // le nostre (24/10). La ricarica è solo un tentativo: se fallisce il file resta ripristinato.

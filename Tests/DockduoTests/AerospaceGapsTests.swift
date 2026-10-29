@@ -123,6 +123,21 @@ gaps.outer.top = 10
     }
     #expect(parseGapValue("[]") == nil && parseGapValue("5.5") == nil && parseGapValue("[{ monitor = { main = 5 } }, 3]") == nil)
 }
+// Un elenco che apre [ e non si chiude più si prenderebbe il resto del file, e riscriverlo lo cancellerebbe: è una forma
+// sconosciuta, né la scrittura (con o senza salvataggio, da ogni lato) né il ripristino toccano il file.
+@Test func anUnclosedBracketLeavesTheFileAlone() throws {
+    let broken = "gaps.outer.left = [ { monitor.main = 5 },\ngaps.outer.right = 5\n\n[mode.main.binding]\n    alt-h = 'focus left'\n"
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dir, real, _) = try tmp(broken); defer { try? FileManager.default.removeItem(at: dir) }
+    #expect(gapEntry("left", in: broken) == nil)
+    #expect(write(real, d, side: .left) == .unknownForm && write(real, d, side: .right) == .unknownForm)
+    #expect(d.object(forKey: gapsBefore) == nil && !FileManager.default.fileExists(atPath: real.path + ".dockduo-backup"))
+    let before = ["left": "gaps.outer.left = 5", "right": "gaps.outer.right = 5", "bottom": ""]
+    d.set(before, forKey: gapsBefore)
+    #expect(write(real, d, side: .left) == .unknownForm && saved(d) == before)
+    #expect(!restoreGaps(to: real, defaults: d, reload: nil) && saved(d) == before)
+    #expect(try String(contentsOf: real, encoding: .utf8) == broken)
+}
 // Il margine in alto si sceglie come AeroSpace: la prima voce che vale per lo schermo, altrimenti il valore finale.
 @Test func theTopGapFollowsAerospacesMatching() throws {
     func screen(_ name: String = "DELL U2720Q", number: Int = 2, main: Bool = false, builtIn: Bool = false, secondary: Bool = false) -> MonitorFacts {
@@ -270,11 +285,12 @@ gaps.outer.top = 10
     #expect(!restoreGaps(to: inApp, defaults: d, reload: nil))
     #expect(try String(contentsOf: inApp, encoding: .utf8) == config)
 }
-// Ogni forma di tabella dei margini ([gaps], [gaps.outer], gaps = {…}) ferma sia la scrittura sia il ripristino; le chiavi
-// puntate no (autore: gaps.outer.left = 5).
+// Ogni forma di tabella dei margini ([gaps], [gaps.outer], gaps = {…}) e ogni voce che non chiude la sua parentesi, anche
+// quella in alto, fermano sia la scrittura sia il ripristino; le chiavi puntate no (autore: gaps.outer.left = 5).
 @Test func everyGapsTableStopsTheRewrite() {
-    #expect(usesGapsTable("[gaps] # margini\nouter.left = 5\n"))
-    #expect(usesGapsTable("[gaps.outer]\nleft = 5\n"))
-    #expect(usesGapsTable("gaps.outer = { left = 5 }\n") && usesGapsTable("  gaps   = { outer = { left = 5 } }\n"))
-    #expect(!usesGapsTable("gaps.outer.left = 5\n[mode.main.binding]\n"))
+    #expect(unknownGapsForm("gaps.outer.top = [{ monitor.main = 5 },\ngaps.outer.left = 5\n") && gapEntry("left", in: "gaps.outer.left = [\n") == nil)
+    #expect(unknownGapsForm("[gaps] # margini\nouter.left = 5\n"))
+    #expect(unknownGapsForm("[gaps.outer]\nleft = 5\n"))
+    #expect(unknownGapsForm("gaps.outer = { left = 5 }\n") && unknownGapsForm("  gaps   = { outer = { left = 5 } }\n"))
+    #expect(!unknownGapsForm("gaps.outer.left = 5\n[mode.main.binding]\n"))
 }
