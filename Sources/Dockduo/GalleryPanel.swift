@@ -10,8 +10,10 @@ import SwiftUI
 class GalleryPanel: NSPanel, EditWindow {
     // Il pannello della cattura: 735 × 900 (la barra laterale 245, il resto tre colonne da 140 coi loro margini).
     static let size = CGSize(width: 735, height: 900)
+    private let settings: Settings   // il lato e la larghezza della barra (galleryFrame)
 
     init(editing: Editing, state: BarState, settings: Settings = .shared) {
+        self.settings = settings
         super.init(contentRect: CGRect(origin: .zero, size: Self.size), styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         level = parkedMenuBar ? SidePanel.aboveParkedMenuBar : SidePanel.belowMenuBar   // con la barra, sopra le finestre
@@ -29,15 +31,13 @@ class GalleryPanel: NSPanel, EditWindow {
 
     override var canBecomeKey: Bool { true }
 
-    // Al centro della parte libera dello schermo (senza barra dei menu e Dock), mai più alta di lei; prende i tasti, come il
-    // campo di ricerca del Centro di Controllo. Solo una galleria davanti (quella vera): quelle delle prove restano fuori.
+    // Dove dice galleryFrame; prende i tasti, come il campo di ricerca del Centro di Controllo. Solo una galleria davanti
+    // (quella vera): quelle delle prove restano fuori.
     func show(on display: CGDirectDisplayID?) {
         let screen = NSScreen.screens.first { $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID == display }
             ?? NSScreen.screens.first
         if let visible = screen?.visibleFrame {
-            let height = min(Self.size.height, visible.height - 80)
-            setFrame(CGRect(x: visible.midX - Self.size.width / 2, y: visible.midY - height / 2, width: Self.size.width, height: height),
-                     display: false)
+            setFrame(galleryFrame(visible: visible, side: settings.barSide, bar: barEdge + settings.sideWidth), display: false)
         }
         alphaValue = 1
         guard isVisible else { return }
@@ -56,6 +56,14 @@ class GalleryPanel: NSPanel, EditWindow {
             else { NSWorkspace.shared.frontmostApplication?.activate() }
         }
     }
+}
+
+// Al centro della parte libera dello schermo (`visible`: senza barra dei menu e Dock), mai più alta di lei meno 80. Con la
+// barra in basso, della parte sopra la barra (`bar`: margine dal bordo più spessore; spec app conclusa §3.2).
+func galleryFrame(visible: CGRect, side: Side, bar: CGFloat) -> CGRect {
+    let free = side == .bottom ? visible.divided(atDistance: bar, from: .minYEdge).remainder : visible
+    let size = GalleryPanel.size, height = min(size.height, free.height - 80)
+    return CGRect(x: free.midX - size.width / 2, y: free.midY - height / 2, width: size.width, height: height)
 }
 
 // Il contenuto della galleria solo in modifica, sul vetro del pannello del Centro di Controllo (gli angoli dalla cattura: 16).

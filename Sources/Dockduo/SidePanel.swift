@@ -18,15 +18,24 @@ func barTop(strip: CGFloat, visibleTop: CGFloat, topGap: CGFloat?) -> CGFloat { 
 // barra da 52, mezzo punto verso il bordo: DockBoxView) resta a 5 pt dal bordo, come quella di macOS (2 + 3; autore, 25/10).
 let barEdge: CGFloat = 2
 
-// Cornice della barra, in coordinate AppKit: `edge` dal bordo e dal fondo; il bordo alto a `top` dalla cima (barTop).
+// Cornice della barra, in coordinate AppKit: `edge` dal bordo e dal fondo; di lato il bordo alto a `top` dalla cima
+// (barTop). In basso (spec app conclusa §3.2) lungo tutto il bordo a `edge` dai lati, alta quanto di lato è larga
+// (`width`): `top` non conta.
 func sideBarFrame(screen: CGRect, side: Side, width: CGFloat, edge: CGFloat, top: CGFloat) -> CGRect {
-    CGRect(x: side == .left ? screen.minX + edge : screen.maxX - edge - width, y: screen.minY + edge,
-           width: width, height: screen.height - top - edge)
+    switch side {
+    case .left, .right:
+        CGRect(x: side == .left ? screen.minX + edge : screen.maxX - edge - width, y: screen.minY + edge,
+               width: width, height: screen.height - top - edge)
+    case .bottom: CGRect(x: screen.minX + edge, y: screen.minY + edge, width: screen.width - 2 * edge, height: width)
+    }
 }
 
-// Il pannello delle etichette (360 pt) sta sul lato interno della barra, alto quanto lei.
+// Il pannello delle etichette (360 pt) sta sul lato interno della barra, alto quanto lei; in basso sopra, largo quanto lei.
 func labelPanelFrame(bar: CGRect, side: Side) -> CGRect {
-    CGRect(x: side == .left ? bar.maxX : bar.minX - 360, y: bar.minY, width: 360, height: bar.height)
+    switch side {
+    case .left, .right: CGRect(x: side == .left ? bar.maxX : bar.minX - 360, y: bar.minY, width: 360, height: bar.height)
+    case .bottom: CGRect(x: bar.minX, y: bar.maxY, width: bar.width, height: 360)
+    }
 }
 
 // Nascondi automaticamente (spec cartelle §4). I tempi del Dock di macOS: il ritardo prima di comparire e la durata dello
@@ -38,27 +47,39 @@ func autohideTiming(_ dock: UserDefaults) -> (delay: TimeInterval, slide: TimeIn
 }
 
 // Un altro schermo tocca quel bordo, anche per un tratto solo (il secondo schermo dell'autore sta a sinistra o a destra
-// del Mac): lì la barra non scorre fuori, finirebbe sull'altro schermo.
+// del Mac; in basso, uno schermo messo sotto): lì la barra non scorre fuori, finirebbe sull'altro schermo.
 func edgeIsShared(screen: CGRect, side: Side, screens: [CGRect]) -> Bool {
     screens.contains { other in
-        abs(side == .left ? other.maxX - screen.minX : other.minX - screen.maxX) < 1 && other.maxY > screen.minY && other.minY < screen.maxY
+        switch side {
+        case .left, .right:
+            abs(side == .left ? other.maxX - screen.minX : other.minX - screen.maxX) < 1 && other.maxY > screen.minY && other.minY < screen.maxY
+        case .bottom: abs(other.maxY - screen.minY) < 1 && other.maxX > screen.minX && other.minX < screen.maxX
+        }
     }
 }
 
-// Da nascosta: fuori dal bordo esterno del tutto (larghezza più il margine dal bordo); su un bordo condiviso resta al suo
-// posto e sfuma.
+// Da nascosta: fuori dal bordo esterno del tutto (lo spessore più il margine dal bordo); su un bordo condiviso resta al
+// suo posto e sfuma.
 func hiddenFrame(shown: CGRect, side: Side, shared: Bool, edge: CGFloat) -> CGRect {
-    shared ? shown : shown.offsetBy(dx: side == .left ? -(shown.width + edge) : shown.width + edge, dy: 0)
+    guard !shared else { return shown }
+    switch side {
+    case .left, .right: return shown.offsetBy(dx: side == .left ? -(shown.width + edge) : shown.width + edge, dy: 0)
+    case .bottom: return shown.offsetBy(dx: 0, dy: -(shown.height + edge))
+    }
 }
 
 // Dov'è il mouse per una barra col nascondi acceso, in coordinate AppKit: sull'ultimo punto del bordo dello schermo
-// all'altezza della barra (`edge`: da nascosta la chiama), sulla barra o fra lei e il bordo (`bar`: da fuori la tiene),
-// altrove (`away`).
+// lungo la barra (`edge`: da nascosta la chiama), sulla barra o fra lei e il bordo (`bar`: da fuori la tiene), altrove
+// (`away`).
 enum MouseSpot { case away, bar, edge }
 func mouseSpot(_ m: CGPoint, bar: CGRect, screen: CGRect, side: Side) -> MouseSpot {
-    let fromEdge = side == .left ? m.x - screen.minX : screen.maxX - m.x   // 0 sul bordo, cresce verso il centro
-    let reach = side == .left ? bar.maxX - screen.minX : screen.maxX - bar.minX
-    guard m.y >= bar.minY, m.y <= bar.maxY, fromEdge >= 0, fromEdge <= reach else { return .away }
+    // Dal bordo (0 sul bordo, cresce verso il centro), fin dove arriva la barra, e se il mouse sta lungo la barra.
+    let (fromEdge, reach, along) = switch side {
+    case .left: (m.x - screen.minX, bar.maxX - screen.minX, m.y >= bar.minY && m.y <= bar.maxY)
+    case .right: (screen.maxX - m.x, screen.maxX - bar.minX, m.y >= bar.minY && m.y <= bar.maxY)
+    case .bottom: (m.y - screen.minY, bar.maxY - screen.minY, m.x >= bar.minX && m.x <= bar.maxX)
+    }
+    guard along, fromEdge >= 0, fromEdge <= reach else { return .away }
     return fromEdge <= 1 ? .edge : .bar
 }
 
@@ -128,7 +149,7 @@ func coversTheSide(window: CGRect, bar: CGRect, screenWidth: CGFloat, screenHeig
 
 // Una barra di lato (§9): un pannello senza cornice che non prende il focus, sta su tutti gli spazi e non si muove con
 // Mission Control, dal bordo alto (barTop) fino in fondo, staccato dai bordi di barEdge. Una per schermo, sul lato scelto
-// (main.swift); quella dell'altro lato, se è nata, resta spenta. Non si chiude e non si ricrea mai
+// (main.swift); quelle degli altri lati, se sono nate, restano spente. Non si chiude e non si ricrea mai
 // (regola del glass): si sposta e si nasconde con l'alpha, anche col nascondi automatico (scorre fuori o sfuma). I testi
 // che escono (SideLabels) stanno in un pannello figlio largo 360 verso il centro, che non prende click e segue la barra.
 final class SidePanel: NSPanel {

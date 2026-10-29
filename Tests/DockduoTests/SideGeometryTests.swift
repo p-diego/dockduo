@@ -84,6 +84,35 @@ private let apps = BarItem.widget(.apps), workspaces = BarItem.widget(.workspace
     #expect(hiddenFrame(shown: bar, side: .right, shared: false, edge: 2) == CGRect(x: 1710, y: 2, width: 52, height: 1067))
     #expect(hiddenFrame(shown: CGRect(x: 2, y: 2, width: 52, height: 1067), side: .left, shared: false, edge: 2).maxX == 0)
 }
+// La barra in basso (spec app conclusa §3.2) sullo schermo del Mac, larga 71 di lato: lungo tutto il bordo a 2 dai bordi e
+// alta 71 (la cima, `top`, non conta); nascosta scende sotto il bordo del tutto (altezza più il margine); le etichette
+// sopra, larghe quanto lei. Corre in orizzontale, quelle di lato in verticale.
+@Test func theBottomBarFrames() {
+    let mac = CGRect(x: 0, y: 0, width: 1512, height: 982)
+    let bar = sideBarFrame(screen: mac, side: .bottom, width: 71, edge: 2, top: 38)
+    #expect(bar == CGRect(x: 2, y: 2, width: 1508, height: 71))
+    #expect(hiddenFrame(shown: bar, side: .bottom, shared: false, edge: 2) == CGRect(x: 2, y: -71, width: 1508, height: 71))
+    #expect(labelPanelFrame(bar: bar, side: .bottom) == CGRect(x: 2, y: 73, width: 1508, height: 360))
+    #expect(Side.bottom.axis == .horizontal && Side.left.axis == .vertical && Side.right.axis == .vertical)
+}
+// Uno schermo messo sotto: il bordo in basso è condiviso e lì la barra sfuma al suo posto; il mouse sull'ultimo punto in
+// basso, dentro la lunghezza della barra, la chiama.
+@Test func aSharedBottomEdgeFades() {
+    let mac = CGRect(x: 0, y: 0, width: 1512, height: 982), below = CGRect(x: -200, y: -1080, width: 1920, height: 1080)
+    #expect(edgeIsShared(screen: mac, side: .bottom, screens: [mac, below]))
+    #expect(!edgeIsShared(screen: mac, side: .bottom, screens: [mac]))
+    // Uno sotto ma tutto a destra (si toccano solo in un angolo) e uno a sinistra: non toccano il bordo in basso.
+    #expect(!edgeIsShared(screen: mac, side: .bottom, screens: [mac, CGRect(x: 1512, y: -1080, width: 1920, height: 1080)]))
+    #expect(!edgeIsShared(screen: mac, side: .bottom, screens: [mac, CGRect(x: -1920, y: 0, width: 1920, height: 1080)]))
+    let bar = CGRect(x: 2, y: 2, width: 1508, height: 71)
+    #expect(hiddenFrame(shown: bar, side: .bottom, shared: true, edge: 2) == bar)
+    #expect(mouseSpot(CGPoint(x: 700, y: 0), bar: bar, screen: mac, side: .bottom) == .edge)
+    #expect(mouseSpot(CGPoint(x: 2, y: 0.5), bar: bar, screen: mac, side: .bottom) == .edge)
+    #expect(mouseSpot(CGPoint(x: 700, y: 40), bar: bar, screen: mac, side: .bottom) == .bar)
+    #expect(mouseSpot(CGPoint(x: 700, y: 74), bar: bar, screen: mac, side: .bottom) == .away)
+    #expect(mouseSpot(CGPoint(x: 1, y: 0), bar: bar, screen: mac, side: .bottom) == .away)     // nell'angolo, oltre la barra
+    #expect(mouseSpot(CGPoint(x: 700, y: -1), bar: bar, screen: mac, side: .bottom) == .away)  // sullo schermo sotto
+}
 // I tempi del Dock di macOS, 0,2 s di attesa e 0,5 s di scorrimento, o quelli che l'utente ha scritto nelle sue
 // impostazioni (`defaults write com.apple.dock autohide-delay -float 0`); un valore negativo vale 0.
 @Test func autohideTimingFromDockDefaults() {

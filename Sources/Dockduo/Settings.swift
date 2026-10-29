@@ -8,7 +8,20 @@ enum WidgetID: String, CaseIterable {
     case workspaces, apps, folders, shelf, nowPlaying, status
 }
 
-enum Side: String { case left, right }
+// Il bordo dello schermo dove sta la barra: di lato o in basso, come il Dock di macOS (spec app conclusa §3).
+enum Side: String { case left, right, bottom }
+
+// Un solo modello per i tre lati (spec app conclusa §3.3): le misure, i trascinamenti e i nomi sono "lungo la barra" e
+// "attraverso la barra", e il lato dice quale asse è quale.
+enum BarAxis { case vertical, horizontal }
+extension Side {
+    var axis: BarAxis {
+        switch self {
+        case .left, .right: .vertical
+        case .bottom: .horizontal
+        }
+    }
+}
 
 // La larghezza della barra: in fondo le icone del Dock grandi quanto quelle del Dock di macOS al massimo sullo schermo
 // dell'autore (cattura del 25/10, 3420 px: il disegno dell'icona 144 px = 72 pt; da noi è 25/52 della barra, quindi

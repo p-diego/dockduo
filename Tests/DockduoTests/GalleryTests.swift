@@ -126,6 +126,15 @@ private final class WatchedGallery: GalleryPanel {
     #expect(s.docks == before && drop.source == nil)
 }
 
+// La galleria al centro della parte libera dello schermo del Mac (sotto la barra dei menu, senza Dock), mai più alta di lei
+// meno 80; con la barra in basso, alta 71 a 2 dal bordo, al centro della parte sopra la barra (spec app conclusa §3.2).
+@Test func theGalleryCentresAboveTheBottomBar() {
+    let visible = CGRect(x: 0, y: 0, width: 1512, height: 949)
+    #expect(galleryFrame(visible: visible, side: .left, bar: 73) == CGRect(x: 388.5, y: 40, width: 735, height: 869))
+    #expect(galleryFrame(visible: visible, side: .right, bar: 73) == galleryFrame(visible: visible, side: .left, bar: 73))
+    #expect(galleryFrame(visible: visible, side: .bottom, bar: 73) == CGRect(x: 388.5, y: 113, width: 735, height: 796))
+}
+
 // La prova a occhio della galleria (GALLERY_SHOTS=cartella): a 2×, in scuro e in chiaro, col Dock dell'autore (App aperte,
 // Cartelle, Mensola, In riproduzione in un Dock; Spazi e Stato fuori). Fuori dallo schermo il vetro non si disegna: sotto,
 // il colore del pannello del Centro di Controllo misurato sulla cattura (scuro) e un grigio chiaro a occhio.

@@ -172,9 +172,10 @@ private func insideApp(_ real: URL) -> Bool {
     return true
 }
 
-// Fa posto alla barra sul lato `side`; nil = fatto. Le righe dell'utente dei tre lati si salvano una volta, alla prima
-// scrittura, intere ("" se mancano); a un salvataggio di prima senza il basso lo si aggiunge dal file com'è, che dockduo
-// non ha mai scritto. Dal lato della barra il valore dell'utente allargato di bordo + larghezza (una riga che manca è lo 0
+// Fa posto alla barra sul lato `side` (a sinistra, a destra o in basso: la chiave è il suo nome); nil = fatto. Le righe
+// dell'utente dei tre lati si salvano una volta, alla prima scrittura, intere ("" se mancano); a un salvataggio di prima
+// senza il basso lo si aggiunge dal file com'è, che dockduo non ha mai scritto. Dal lato della barra il valore dell'utente
+// allargato di bordo + `width`, lo spessore della barra (in basso la sua altezza; una riga che manca è lo 0
 // di AeroSpace); col nascondi automatico com'è: quando esce, la barra passa sopra le finestre come il Dock di macOS (spec
 // cartelle §4). Gli altri due lati tornano le righe dell'utente.
 func writeGaps(side: Side, edge: Int, width: Int, autohide: Bool, to file: URL, defaults: UserDefaults,

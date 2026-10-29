@@ -169,6 +169,16 @@ gaps.outer.top = 10
     #expect(try String(contentsOf: real, encoding: .utf8) == config.replacingOccurrences(
         of: "gaps.outer.left =       5", with: "gaps.outer.left = 63   # dockduo: barra di lato"))
 }
+// La barra in basso, alta 71 a 2 dal bordo (spec app conclusa §3.2): il basso è quello dell'utente più 73, la destra
+// scritta prima torna la sua riga, la sinistra resta la sua.
+@Test func theBottomGapIsWidened() throws {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dir, real, _) = try tmp(config); defer { try? FileManager.default.removeItem(at: dir) }
+    #expect(write(real, d) == nil)
+    #expect(writeGaps(side: .bottom, edge: 2, width: 71, autohide: false, to: real, defaults: d, reload: nil) == nil)
+    #expect(try String(contentsOf: real, encoding: .utf8) == config.replacingOccurrences(
+        of: "gaps.outer.bottom =     5", with: "gaps.outer.bottom = 78   # dockduo: barra di lato"))
+}
 // La riga in alto dell'autore (per monitor) resta identica, byte per byte, dopo la scrittura e dopo il ripristino.
 @Test func theTopLineIsNeverTouched() throws {
     let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
