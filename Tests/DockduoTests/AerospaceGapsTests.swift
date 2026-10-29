@@ -277,6 +277,21 @@ gaps.outer.top = 10
     #expect(restoreGaps(to: real, defaults: d, reload: nil))
     #expect(try String(contentsOf: real, encoding: .utf8) == "gaps.outer.left = 5\ngaps.outer.bottom = 10\ngaps.outer.right = 8\n")
 }
+// Spazi o un a capo Windows lasciati da un editor dopo il segno: la riga resta di dockduo, si riscrive dal 5 dell'utente
+// (63, non 63 + 58) e all'uscita torna il 5.
+@Test func ourLineWithTrailingSpacesStaysOurs() throws {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dir, real, _) = try tmp("gaps.outer.left = 5\ngaps.outer.bottom = 5\n"); defer { try? FileManager.default.removeItem(at: dir) }
+    #expect(write(real, d, side: .left) == nil)
+    for tail in ["  ", "\r"] {
+        try "gaps.outer.left = 63   # dockduo: barra di lato\(tail)\ngaps.outer.bottom = 5\n".write(to: real, atomically: true, encoding: .utf8)
+        #expect(write(real, d, side: .left) == nil)
+        #expect(try String(contentsOf: real, encoding: .utf8) == "gaps.outer.left = 63   # dockduo: barra di lato\ngaps.outer.bottom = 5\n")
+    }
+    try "gaps.outer.left = 63   # dockduo: barra di lato \ngaps.outer.bottom = 5\n".write(to: real, atomically: true, encoding: .utf8)
+    #expect(restoreGaps(to: real, defaults: d, reload: nil))
+    #expect(try String(contentsOf: real, encoding: .utf8) == "gaps.outer.left = 5\ngaps.outer.bottom = 5\n")
+}
 // La riga della barra, col segno, è di dockduo e si riscrive a ogni sync dal valore dell'utente: con la barra più larga, e
 // anche cambiata a mano col segno lasciato, pure se un formattatore ha tolto gli spazi prima del commento.
 @Test func theBarsOwnLineIsRewrittenAtEverySync() throws {

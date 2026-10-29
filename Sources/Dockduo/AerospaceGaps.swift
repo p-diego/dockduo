@@ -5,8 +5,9 @@ import Foundation
 // posto alla barra (spec app conclusa §2.4): dal lato della barra il valore dell'utente con la barra aggiunta a ogni numero,
 // anche per schermo; gli altri lati tornano le righe dell'utente. gaps.outer.top si legge solo per allineare la barra
 // (gapValue), mai si scrive. Scansione per righe, niente parser TOML: una voce finisce alla riga dove le sue parentesi si
-// chiudono. Le forme che la scansione non capisce (la tabella [gaps], gaps = {…} in una riga, valori che non sono numeri o
-// elenchi per schermo) non si scrivono: writeGaps rinuncia (.unknownForm) e il file resta com'è.
+// chiudono. Le forme che la scansione non capisce non si scrivono (.unknownForm): con la tabella [gaps], gaps = {…} in una
+// riga o una parentesi mai chiusa il file resta com'è; con un valore che non è un numero né un elenco per schermo quella
+// voce resta com'è e tornano dell'utente solo le righe di dockduo degli altri lati (con la prova di lettura, come sempre).
 let sideGapKeys = ["left", "right", "bottom"]
 private let gapsKey = "dockduo.aerospace.gapsBefore"
 private let gapsMark = "   # dockduo: barra di lato"
@@ -126,9 +127,11 @@ func gapValue(_ v: GapValue, on m: MonitorFacts) -> Int? {
     }?.value ?? v.fallback
 }
 
-// Le righe di dockduo sono solo quelle col suo segno in fondo, anche se un formattatore ha cambiato gli spazi prima del #:
-// presa per dell'utente, la riga allargata farebbe da base e crescerebbe a ogni sync.
-private func ours(_ entry: String) -> Bool { entry.hasSuffix(gapsMark.drop { $0 == " " }) }
+// Le righe di dockduo sono solo quelle col suo segno in fondo, anche se un formattatore ha cambiato gli spazi prima del # o
+// un editor ne ha lasciati dopo (o un \r): presa per dell'utente, la riga allargata farebbe da base e crescerebbe a ogni sync.
+private func ours(_ entry: String) -> Bool {
+    entry.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix(gapsMark.drop { $0 == " " })
+}
 
 // Salvataggio perso con le righe nostre ancora nel file: la base è il margine in basso se è un numero dell'utente, altrimenti 0.
 func gapsBase(_ toml: String) -> Int {
