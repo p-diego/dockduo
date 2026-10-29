@@ -3,18 +3,18 @@
     {
       "layers": [
         {
-          "image-name": "barra.svg",
-          "name": "Barra",
+          "image-name": "anello.svg",
+          "name": "Anello",
           "position": {
             "scale": 1.0,
             "translation-in-points": [
-              0,
-              188
+              -260.0,
+              0.0
             ]
           }
         }
       ],
-      "name": "Barra",
+      "name": "Anello",
       "shadow": {
         "kind": "neutral",
         "opacity": 0.5
@@ -23,44 +23,86 @@
     {
       "layers": [
         {
-          "image-name": "mostro-occhi.svg",
-          "name": "Mostro \u00b7 occhi",
+          "image-name": "casella-1.svg",
+          "name": "Casella 1",
           "position": {
-            "scale": 5.661103769492993,
+            "scale": 1.0,
             "translation-in-points": [
-              25.172264877547946,
-              -39.975001083898746
+              -260.0,
+              -236.0
             ]
           }
         },
         {
-          "image-name": "mostro-corpo.svg",
-          "name": "Mostro \u00b7 corpo",
+          "image-name": "casella-2.svg",
+          "name": "Casella 2",
           "position": {
-            "scale": 5.661103769492993,
+            "scale": 1.0,
             "translation-in-points": [
-              25.172264877547946,
-              -39.975001083898746
+              -260.0,
+              0.0
             ]
           }
         },
         {
-          "image-name": "mostro-bordino.svg",
-          "name": "Mostro \u00b7 bordino",
+          "image-name": "casella-3.svg",
+          "name": "Casella 3",
           "position": {
-            "scale": 5.661103769492993,
+            "scale": 1.0,
             "translation-in-points": [
-              25.172264877547946,
-              -39.975001083898746
+              -260.0,
+              236.0
             ]
           }
         }
       ],
-      "name": "Mostro",
+      "name": "Caselle",
       "shadow": {
         "kind": "neutral",
         "opacity": 0.5
       }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "capsula.svg",
+          "name": "Capsula",
+          "position": {
+            "scale": 1.0,
+            "translation-in-points": [
+              -260.0,
+              0.0
+            ]
+          },
+          "opacity": 0.22
+        }
+      ],
+      "name": "Capsula",
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "finestra.svg",
+          "name": "Finestra",
+          "position": {
+            "scale": 1.0,
+            "translation-in-points": [
+              168.0,
+              0.0
+            ]
+          },
+          "glass": false
+        }
+      ],
+      "name": "Finestra"
     }
   ],
   "supported-platforms": {
