@@ -264,6 +264,45 @@ gaps.outer.top = 10
     #expect(d.object(forKey: gapsBefore) == nil)
     #expect(restoreGaps(to: real, defaults: d, reload: nil))
 }
+// Solo le righe col segno sono di dockduo: il basso portato a 10 e una destra aggiunta mentre dockduo gira restano
+// dell'utente, al sync dopo e all'uscita; la sinistra della barra torna il suo 5.
+@Test func theUsersEditsWhileRunningAreKept() throws {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dir, real, _) = try tmp("gaps.outer.left = 5\ngaps.outer.bottom = 5\n"); defer { try? FileManager.default.removeItem(at: dir) }
+    #expect(write(real, d, side: .left) == nil)
+    let edited = "gaps.outer.left = 63   # dockduo: barra di lato\ngaps.outer.bottom = 10\ngaps.outer.right = 8\n"
+    try edited.write(to: real, atomically: true, encoding: .utf8)
+    #expect(write(real, d, side: .left) == nil)
+    #expect(try String(contentsOf: real, encoding: .utf8) == edited)
+    #expect(restoreGaps(to: real, defaults: d, reload: nil))
+    #expect(try String(contentsOf: real, encoding: .utf8) == "gaps.outer.left = 5\ngaps.outer.bottom = 10\ngaps.outer.right = 8\n")
+}
+// La riga della barra, col segno, è di dockduo e si riscrive a ogni sync dal valore dell'utente: con la barra più larga, e
+// anche cambiata a mano col segno lasciato, pure se un formattatore ha tolto gli spazi prima del commento.
+@Test func theBarsOwnLineIsRewrittenAtEverySync() throws {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dir, real, _) = try tmp(config); defer { try? FileManager.default.removeItem(at: dir) }
+    #expect(write(real, d) == nil)
+    #expect(writeGaps(side: .right, edge: 6, width: 72, autohide: false, to: real, defaults: d, reload: nil) == nil)
+    #expect(try String(contentsOf: real, encoding: .utf8) == config.replacingOccurrences(
+        of: "gaps.outer.right =      5", with: "gaps.outer.right = 83   # dockduo: barra di lato"))
+    try config.replacingOccurrences(of: "gaps.outer.right =      5", with: "gaps.outer.right = 99 # dockduo: barra di lato")
+        .write(to: real, atomically: true, encoding: .utf8)
+    #expect(write(real, d) == nil)
+    #expect(try String(contentsOf: real, encoding: .utf8) == written)
+    #expect(restoreGaps(to: real, defaults: d, reload: nil))
+    #expect(try String(contentsOf: real, encoding: .utf8) == config)
+}
+// Dal lato della barra una forma che dockduo non sa modificare (ma AeroSpace sì): quel lato non si tocca, e il lato allargato
+// prima torna la riga dell'utente invece di restare largo.
+@Test func anUneditableBarSidePutsOurOtherLineBack() throws {
+    let text = config.replacingOccurrences(of: "gaps.outer.left =       5", with: "gaps.outer.left = [{ monitor = { main = 5 } }, 3]")
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let (dir, real, _) = try tmp(text); defer { try? FileManager.default.removeItem(at: dir) }
+    #expect(write(real, d) == nil)
+    #expect(write(real, d, side: .left) == .unknownForm)
+    #expect(try String(contentsOf: real, encoding: .utf8) == text)
+}
 // Col nascondi automatico le finestre si prendono anche il lato della barra: lì resta il valore dell'utente, come dagli
 // altri lati (spec cartelle §4); la barra, quando esce, passa sopra di loro.
 @Test func autohideGapIsTheUsersValue() throws {

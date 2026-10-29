@@ -126,10 +126,14 @@ func gapValue(_ v: GapValue, on m: MonitorFacts) -> Int? {
     }?.value ?? v.fallback
 }
 
+// Le righe di dockduo sono solo quelle col suo segno in fondo, anche se un formattatore ha cambiato gli spazi prima del #:
+// presa per dell'utente, la riga allargata farebbe da base e crescerebbe a ogni sync.
+private func ours(_ entry: String) -> Bool { entry.hasSuffix(gapsMark.drop { $0 == " " }) }
+
 // Salvataggio perso con le righe nostre ancora nel file: la base è il margine in basso se è un numero dell'utente, altrimenti 0.
 func gapsBase(_ toml: String) -> Int {
     let bottom = entryText("bottom", in: toml)
-    return bottom.hasSuffix(gapsMark) ? 0 : gapEntry("bottom", in: bottom).flatMap { Int($0.value) } ?? 0
+    return ours(bottom) ? 0 : gapEntry("bottom", in: bottom).flatMap { Int($0.value) } ?? 0
 }
 
 // nil = togli la voce, tutte le sue righe. Una chiave mancante va prima della prima tabella (dopo una tabella le chiavi
@@ -172,12 +176,12 @@ private func insideApp(_ real: URL) -> Bool {
     return true
 }
 
-// Fa posto alla barra sul lato `side` (a sinistra, a destra o in basso: la chiave è il suo nome); nil = fatto. Le righe
-// dell'utente dei tre lati si salvano una volta, alla prima scrittura, intere ("" se mancano); a un salvataggio di prima
-// senza il basso lo si aggiunge dal file com'è, che dockduo non ha mai scritto. Dal lato della barra il valore dell'utente
-// allargato di bordo + `width`, lo spessore della barra (in basso la sua altezza; una riga che manca è lo 0
-// di AeroSpace); col nascondi automatico com'è: quando esce, la barra passa sopra le finestre come il Dock di macOS (spec
-// cartelle §4). Gli altri due lati tornano le righe dell'utente.
+// Fa posto alla barra sul lato `side` (a sinistra, a destra o in basso: la chiave è il suo nome); nil = fatto. Sono di
+// dockduo solo le righe col segno (gapsMark): le altre sono dell'utente e si salvano a ogni scrittura com'è il file adesso,
+// intere ("" se mancano), così un suo cambio mentre dockduo gira resta; quelle col segno tengono il salvataggio di quando
+// erano sue. Dal lato della barra il valore dell'utente allargato di bordo + `width`, lo spessore della barra (in basso la
+// sua altezza; una riga che manca è lo 0 di AeroSpace); col nascondi automatico com'è: quando esce, la barra passa sopra le
+// finestre come il Dock di macOS (spec cartelle §4). Gli altri due lati tornano le righe dell'utente.
 func writeGaps(side: Side, edge: Int, width: Int, autohide: Bool, to file: URL, defaults: UserDefaults,
                reload: ((_ dryRun: Bool) -> Bool)?) -> SpaceProblem? {
     let real = file.resolvingSymlinksInPath()
@@ -188,14 +192,18 @@ func writeGaps(side: Side, edge: Int, width: Int, autohide: Bool, to file: URL, 
     }
     let before = defaults.dictionary(forKey: gapsKey) as? [String: String]
     var saved = before ?? [:]
-    for k in sideGapKeys where saved[k] == nil {
-        // Una riga già nostra (salvataggio perso con le righe ancora nel file) non è dell'utente: si salva la base.
+    for k in sideGapKeys {
+        // Una riga senza segno è dell'utente com'è adesso, anche cambiata o aggiunta mentre dockduo gira. Una nostra tiene il
+        // salvataggio; senza (perso con le righe ancora nel file) si salva la base.
         let text = entryText(k, in: old)
-        saved[k] = text.hasSuffix(gapsMark) ? "gaps.outer.\(k) = \(gapsBase(old))" : text
+        if !ours(text) { saved[k] = text } else if saved[k] == nil { saved[k] = "gaps.outer.\(k) = \(gapsBase(old))" }
     }
+    var lines = savedLines(saved)
     let k = side.rawValue, mine = saved[k]!
     guard let user = mine.isEmpty ? GapValue(perMonitor: [], fallback: 0) : gapEntry(k, in: mine).flatMap({ parseGapValue($0.value) }) else {
         logger.error("gaps AeroSpace: margine in una forma che dockduo non sa modificare, non si tocca")
+        // Le righe dell'utente restano come sono; le nostre, di un lato allargato prima, tornano le sue come all'uscita.
+        _ = apply(withGapLines(old, lines), old: old, real: real, reload: reload)
         return .unknownForm
     }
     if before == nil {
@@ -203,7 +211,6 @@ func writeGaps(side: Side, edge: Int, width: Int, autohide: Bool, to file: URL, 
         if !FileManager.default.fileExists(atPath: backup.path) { try? FileManager.default.copyItem(at: real, to: backup) }
     }
     if saved != before { defaults.set(saved, forKey: gapsKey) }
-    var lines = savedLines(saved)
     lines[k] = "gaps.outer.\(k) = \(gapText(widened(user, by: autohide ? 0 : edge + width)))" + gapsMark
     return apply(withGapLines(old, lines), old: old, real: real, reload: reload) ? nil : .rejected
 }
@@ -222,7 +229,8 @@ func restoreGaps(to file: URL, defaults: UserDefaults, reload: ((Bool) -> Bool)?
     guard let saved = defaults.dictionary(forKey: gapsKey) as? [String: String] else { return true }
     let real = file.resolvingSymlinksInPath()
     guard !insideApp(real), let old = try? String(contentsOf: real, encoding: .utf8), !unknownGapsForm(old) else { return false }
-    let new = withGapLines(old, savedLines(saved))
+    // Solo le righe col segno sono nostre e tornano quelle salvate; le altre sono dell'utente com'è adesso.
+    let new = withGapLines(old, savedLines(saved.filter { ours(entryText($0.key, in: old)) }))
     // Le righe di prima sono dell'utente e funzionavano già: niente prova (dry-run), che con AeroSpace muto le lascerebbe
     // le nostre (24/10). La ricarica è solo un tentativo: se fallisce il file resta ripristinato.
     guard new == old || (try? new.write(to: real, atomically: true, encoding: .utf8)) != nil else { return false }
