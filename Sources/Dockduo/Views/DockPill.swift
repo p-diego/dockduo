@@ -19,7 +19,7 @@ import SwiftUI
 struct DockBoxView: View {
     let box: DockBox
     let state: BarState
-    let mirrored: Bool   // barra a destra: il bordo dello schermo è a destra
+    let side: Side   // dove sta il bordo dello schermo (il mezzo punto verso di lui)
     let icons: IconDragHooks
     // Dove stanno la capsula e le sue cartelle e i suoi file nello spazio "bar" (il ⌘-trascina e i rilasci, SideBarView).
     // Da qui dentro: una vista che la misura da fuori darebbe al Dock vuoto un posto alto zero, e la zona gli darebbe il
@@ -29,6 +29,7 @@ struct DockBoxView: View {
     var onSection: (BarItem, CGRect) -> Void = { _, _ in }   // le sezioni, per il rilascio di una sezione (sectionTarget)
     var settings = Settings.shared   // cartelle e mensola (le prove ne danno uno loro)
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
     var drop = DockDrop.shared   // il trascinamento della barra (le prove ne danno uno loro)
     var display: CGDirectDisplayID = 0   // lo schermo della sua barra: i Dock vuoti compaiono solo dove sta il trascinamento
     var hover: DockHover?   // un trascinamento sopra questa capsula (DockDrop.hover; le prove lo danno da qui)
@@ -38,14 +39,17 @@ struct DockBoxView: View {
 
     var body: some View {
         if box.isStatus {
-            // In modifica col margine di una capsula (7): il bordo e il "−" ci stanno anche in cima alla barra.
-            StatusElement(state: state, mirrored: mirrored)
+            // In modifica col margine di una capsula (7): il bordo e il "−" ci stanno anche in cima alla barra. Lo Stato non si
+            // stende con la barra (ora sopra l'anello, alto 44): il suo bordo è quello di lato anche in basso, largo 37 e alto
+            // quanto lui più 3 e 3.
+            StatusElement(state: state, side: side)
                 .modifier(EditFrame(item: .widget(.status), on: editing.on, settings: settings,
-                                    shift: (mirrored ? 0.5 : -0.5) * dockUnit * scale))
+                                    shift: side.towardEdge(0.5 * dockUnit * scale)))
+                .environment(\.barAxis, .vertical)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("bar")) } action: { onSection(.widget(.status), $0) }
                 .opacity(drop.movingSection == .widget(.status) ? lifted : 1)
                 .foregroundStyle(.white)   // il bordo sullo sfondo, bianco come lo Stato
-                .padding(.vertical, editing.on ? 7 * dockUnit * scale : 0)
+                .padding(axis.ends, editing.on ? 7 * dockUnit * scale : 0)
                 .animation(.smooth(duration: 0.3), value: editing.on)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("bar")) } action: { onFrame($0) }
                 .transition(.blurReplace)
@@ -82,7 +86,7 @@ struct DockBoxView: View {
                 ForEach(shown, id: \.self) { item in
                     if let room, room.at == shown.firstIndex(of: item) { roomSpace(room.height) }
                     if item != shown.first {
-                        if editing.on { Color.clear.frame(height: dockLine * scale) }   // il posto della linea
+                        if editing.on { Color.clear.frame(axis, along: dockLine * scale) }   // il posto della linea
                         else { DockSeparator(settings: settings).transition(.opacity) }
                     }
                     Group {
@@ -105,7 +109,7 @@ struct DockBoxView: View {
             .onDisappear { if hover != nil { drop.hover = nil; drop.overBar = nil } }
             // Larga 45 al centro della barra da 52 starebbe a 5,5 dal bordo dello schermo (2 + 3,5); quella di macOS è a 5:
             // mezzo punto verso il bordo.
-            .offset(x: (mirrored ? 0.5 : -0.5) * dockUnit * scale)
+            .offset(side.towardEdge(0.5 * dockUnit * scale))
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("bar")) } action: { onFrame($0) }
             .transition(.blurReplace)
             .animation(.smooth(duration: 0.3), value: state.dock)
@@ -120,7 +124,7 @@ struct DockBoxView: View {
 
     // Il posto della sezione in mano: lei e lo spazio della sua linea.
     private func roomSpace(_ height: CGFloat) -> some View {
-        Color.clear.frame(height: height + dockLine * scale).transition(.opacity)
+        Color.clear.frame(axis, along: height + dockLine * scale).transition(.opacity)
     }
 
     // Una sezione. Le caselle del Dock a 31, 2 fra l'una e l'altra; le altre alla scala che porta i loro 26 nei 31 dentro
@@ -141,7 +145,7 @@ struct DockBoxView: View {
         case .widget(.folders):
             BarStack(spacing: 2 * dockUnit) {
                 ForEach(folders) { fileTile($0, folder: true, above: gap == $0.id ? step : 0) }
-                if gap == foldersEnd { Color.clear.frame(height: dockIcon * scale) }   // il posto in fondo alle cartelle
+                if gap == foldersEnd { Color.clear.frame(axis, along: dockIcon * scale) }   // il posto in fondo alle cartelle
             }
         case .widget(.shelf):
             BarStack(spacing: 2 * dockUnit) {
@@ -171,7 +175,7 @@ struct DockBoxView: View {
     private func tile(_ id: UUID, above: CGFloat, @ViewBuilder _ content: () -> some View) -> some View {
         content()
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("bar")) } action: { onTile(id, $0) }
-            .padding(.top, above)
+            .padding(axis.start, above)
     }
 
     private func shows(_ item: BarItem) -> Bool { barItemShows(item, state: state, settings: settings, drop: drop, editing: editing) }
@@ -206,15 +210,16 @@ struct DockBoxView: View {
 // schermo della sua barra. Il vetro prende i clic come quello del Dock.
 struct EmptyBarCapsule: View {
     let display: CGDirectDisplayID?
-    let mirrored: Bool
+    let side: Side
     var editing = Editing.shared   // le prove ne danno una loro
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
 
     var body: some View {
-        Color.clear.frame(height: dockIcon * scale)
+        Color.clear.frame(axis, along: dockIcon * scale)
             .pill(padding: 7 * dockUnit, dock: true)
             .overlay(MenuAnchor { DockMenuView() })
-            .offset(x: (mirrored ? 0.5 : -0.5) * dockUnit * scale)   // come la capsula del Dock
+            .offset(side.towardEdge(0.5 * dockUnit * scale))   // come la capsula del Dock
             .onTapGesture(perform: click)
             .accessibilityElement().accessibilityLabel(Text("Edit Dock…")).accessibilityAddTraits(.isButton)
     }
@@ -312,8 +317,12 @@ final class DockLineMenuView: RightClickMenuView {
                                        owner: self))
         super.updateTrackingAreas()
     }
-    // Le sole frecce, senza la barretta in mezzo, come sulla linea del Dock di macOS (autore, 25/10).
-    private var resizeCursor: NSCursor { .frameResize(position: settings.barSide == .left ? .right : .left, directions: .all) }
+    // Le sole frecce, senza la barretta in mezzo, come sulla linea del Dock di macOS (autore, 25/10): a destra e sinistra
+    // di lato, in su e in giù in basso.
+    private var resizeCursor: NSCursor {
+        let edge: NSCursor.FrameResizePosition = switch settings.barSide { case .left: .right; case .right: .left; case .bottom: .top }
+        return .frameResize(position: edge, directions: .all)
+    }
     override func cursorUpdate(with event: NSEvent) { resizeCursor.set() }
     override func mouseEntered(with event: NSEvent) { resizeCursor.set() }
     override func mouseExited(with event: NSEvent) { NSCursor.arrow.set() }
@@ -372,48 +381,57 @@ let inDockScale: CGFloat = dockIcon / 26
 // voci attorno: 6 + 1 + 6. Lo spessore a pixel interi (almeno 1), se no in un'altra scala è un filo sfocato; l'altezza
 // resta 13. È la linea fra due sezioni del Dock (DockBoxView).
 // Come quella di macOS (autore, 25/10): il tasto destro apre il suo menu (DockLineMenuView) e trascinarla ridimensiona il
-// Dock (lineDragWidth), col cursore delle misure a destra e sinistra. Li prende tutta la sua fascia, 6 + 1 + 6 larga quanto
-// la capsula. Col ⌘ il trascinamento è quello della barra, che sposta il Dock: qui niente.
+// Dock (lineDragWidth), col cursore delle frecce (a destra e sinistra di lato, in su e in giù in basso). Li prende tutta la
+// sua fascia, 6 + 1 + 6 larga quanto la capsula. Col ⌘ il trascinamento è quello della barra, che sposta il Dock: qui
+// niente. In basso la linea sta in piedi, 1 × 33, come quella del Dock di macOS in basso.
 private struct DockSeparator: View {
     let settings: Settings
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
     @Environment(\.displayScale) private var pixels
     // Larghezza, scala e puntatore di quando il trascinamento è cominciato, e se ridimensiona (senza ⌘). Si azzera da sé
     // alla fine, anche di un gesto interrotto.
-    @GestureState private var start: (width: Double, scale: CGFloat, x: CGFloat, resizes: Bool)?
+    @GestureState private var start: (width: Double, scale: CGFloat, mouse: CGPoint, resizes: Bool)?
 
     var body: some View {
         let u = dockUnit * scale
         Rectangle().fill(.foreground.opacity(0.27))
-            .frame(width: 33 * u, height: max(1, (u * pixels).rounded()) / pixels)
-            .padding(.top, 6 * u)
-            .frame(height: dockLine * scale, alignment: .top)
-            .frame(maxWidth: .infinity)
+            .frame(axis, along: max(1, (u * pixels).rounded()) / pixels, across: 33 * u)
+            .padding(axis.start, 6 * u)
+            .frame(axis, along: dockLine * scale, alignment: .topLeading)
+            .frame(axis, maxAcross: .infinity)
             .contentShape(Rectangle())
             .simultaneousGesture(resize)
             .overlay(MenuAnchor { DockLineMenuView(settings: settings) })
     }
 
     // Il puntatore si legge sullo schermo: la barra a destra si allarga verso sinistra, e nel pannello il punto di partenza
-    // scapperebbe con lei. Al primo passo la barra non si è ancora mossa: lì il trascinamento dice dov'era all'inizio.
+    // scapperebbe con lei. Al primo passo la barra non si è ancora mossa: lì il trascinamento dice dov'era all'inizio (lo
+    // schermo conta in su, il trascinamento in giù).
     private var resize: some Gesture {
         DragGesture(minimumDistance: 2).updating($start) { v, start, _ in
-            let x = NSEvent.mouseLocation.x
-            if start == nil { start = (settings.sideWidth, scale, x - v.translation.width, !NSEvent.modifierFlags.contains(.command)) }
+            let p = NSEvent.mouseLocation
+            if start == nil {
+                start = (settings.sideWidth, scale, CGPoint(x: p.x - v.translation.width, y: p.y + v.translation.height),
+                         !NSEvent.modifierFlags.contains(.command))
+            }
             guard let s = start, s.resizes else { return }
-            let width = lineDragWidth(start: s.width, scale: s.scale, dx: x - s.x, side: settings.barSide)
+            let delta = CGSize(width: p.x - s.mouse.x, height: p.y - s.mouse.y)
+            let width = lineDragWidth(start: s.width, scale: s.scale, delta: delta, side: settings.barSide)
             if width != settings.sideWidth { settings.sideWidth = width }
         }
     }
 }
 
-// La larghezza della barra trascinando la linea del Dock di `dx` punti sullo schermo (verso destra in più): verso il centro
-// dello schermo più grande, verso il bordo più piccolo, a numeri interi e nei suoi limiti (sideWidths). Come
+// La larghezza della barra trascinando la linea del Dock di `delta` punti sullo schermo (in su e verso destra in più): verso
+// il centro dello schermo più grande, verso il bordo più piccolo, a numeri interi e nei suoi limiti (sideWidths). Conta solo
+// lo spostamento attraverso la barra: di lato in orizzontale, in basso in verticale. Come
 // nel Dock di macOS il bordo interno del Dock segue il puntatore: la capsula è al centro della barra, larga dockWidth per la
 // sua scala (quella dell'inizio, già ristretta se la barra non tiene i Dock), quindi il bordo fa (1 + capsula/barra) / 2
 // di punto per punto di barra.
-func lineDragWidth(start: Double, scale: CGFloat, dx: CGFloat, side: Side) -> Double {
-    let toCentre = side == .left ? dx : -dx, edge = (1 + dockWidth * scale / start) / 2
+func lineDragWidth(start: Double, scale: CGFloat, delta: CGSize, side: Side) -> Double {
+    let toCentre = switch side { case .left: delta.width; case .right: -delta.width; case .bottom: delta.height }
+    let edge = (1 + dockWidth * scale / start) / 2
     return clamped((start + toCentre / edge).rounded(), to: sideWidths, default: start)
 }
 
@@ -476,6 +494,7 @@ private struct DockFileTile: View {
 // la barra l'aveva tolto. Un'uscita persa la rimedia la barra (SidePanel.dropStaleDockName).
 private struct DockName: ViewModifier {
     let name: String?
+    @Environment(\.barAxis) private var axis
     @State private var hovering = false
     @State private var leaving: DispatchWorkItem?
     @State private var entered = 0   // ogni entrata chiede di nuovo il nome
@@ -489,7 +508,7 @@ private struct DockName: ViewModifier {
                 if inside { hovering = true; entered += 1 } else { debounce(&leaving, after: 0.05) { hovering = false } }
             }
             .onChange(of: busy) { _, now in if now { leaving?.cancel(); hovering = false } }
-            .frame(maxWidth: .infinity)
+            .frame(axis, maxAcross: .infinity)
             .sideLabel(id: SideLabels.dock, text: hovering && !busy && Settings.shared.dockHoverNames ? name : nil, style: .dockName,
                        claim: entered)
     }

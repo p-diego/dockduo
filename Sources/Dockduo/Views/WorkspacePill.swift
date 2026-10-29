@@ -26,13 +26,14 @@ struct WorkspacePill: View {
     let onDrop: (CGPoint) -> Void                      // il puntatore al rilascio
     @Environment(\.palette) private var palette
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
 
     var body: some View {
         let focused = report.workspace.isFocused
         let reduced = report.workspace.name.isEmpty   // senza AeroSpace (reducedReport): click = attiva l'app, niente spazio né trascinamento
         // Ogni spazio gli stessi margini: uno spazio vuoto è lungo uguale ovunque — i margini per posizione rendevano le
         // misure "strane" (autore, 4/10). Stretti, come una fila di caselle del Dock: coi 12 di prima numero e icone si
-        // perdevano nel Dock. In colonna: il nome sopra, le icone una sotto l'altra (spec barra-di-lato §3).
+        // perdevano nel Dock. In colonna: il nome sopra, le icone una sotto l'altra (spec barra-di-lato §3); in basso in fila.
         BarStack(spacing: 2 * 26 / 31) {
             // La pillola ridotta si presenta: un simbolo al posto del nome dello spazio — e da vuota non è una capsula muta (autore, 3/10).
             if reduced {
@@ -53,8 +54,8 @@ struct WorkspacePill: View {
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
         }
-        .padding(.vertical, 4 * scale)
-        .frame(width: 26 * scale)
+        .padding(axis.ends, 4 * scale)
+        .frame(axis, across: 26 * scale)
         .modifier(WorkspaceBackground(focused: focused))   // il vetro; dentro un Dock un'evidenziazione interna
         .overlay {
             if highlighted {

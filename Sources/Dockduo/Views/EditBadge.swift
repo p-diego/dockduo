@@ -20,8 +20,9 @@ struct EditFrame: ViewModifier {
     let on: Bool   // in modifica; fuori, la sezione resta com'è (e non perde il suo stato)
     var empty = false
     let settings: Settings
-    var shift: CGFloat = 0   // lo Stato sta mezzo punto verso il bordo dello schermo (StatusElement): il bordo con lui
+    var shift: CGSize = .zero   // lo Stato sta mezzo punto verso il bordo dello schermo (StatusElement): il bordo con lui
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
 
     func body(content: Content) -> some View {
         let u = dockUnit * scale, badge = 11.5 * u, reach = 3 * u   // il "−" prende i clic anche un filo attorno
@@ -45,9 +46,9 @@ struct EditFrame: ViewModifier {
                         .onTapGesture { settings.removeSection(item) }
                         .accessibilityElement().accessibilityLabel(Text("Remove \(name)")).accessibilityAddTraits(.isButton)
                 }
-                .padding(.vertical, -3 * u)
-                .frame(width: 37 * u)
-                .offset(x: shift)
+                .padding(axis.ends, -3 * u)
+                .frame(axis, across: 37 * u)
+                .offset(shift)
                 .transition(.opacity)
             }
         }
@@ -99,18 +100,20 @@ extension WidgetID {
     }
 }
 
-// Fine, subito sotto l'ultimo Dock in modifica (§2): il pulsante blu del Centro di Controllo alla sua misura vera (sulla
+// Fine, subito dopo l'ultimo Dock in modifica (§2): il pulsante blu del Centro di Controllo alla sua misura vera (sulla
 // cattura 59 × 28, il testo a 13 medio, bianco sul blu di sistema), non in scala con la barra (autore, 27/10: «è enorme il
-// testo»); in una barra stretta non più largo della capsula del Dock. Chiude la modifica su tutte le barre. Lo stesso in
-// fondo alla galleria, largo 60 come quello del Centro di Controllo (`width`).
+// testo»); in una barra stretta di lato non più largo della capsula del Dock (in basso la capsula è alta almeno 33: ci sta
+// sempre). Chiude la modifica su tutte le barre. Lo stesso in fondo alla galleria, largo 60 come quello del Centro di
+// Controllo (`width`).
 struct EditDoneButton: View {
     var width: CGFloat?   // nil: quella della barra
     var editing = Editing.shared   // la galleria dà la sua
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
 
     var body: some View {
         Text("Done").font(.system(size: 13, weight: .medium)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.5)
-            .frame(width: width ?? min(59, dockWidth * scale), height: 28)
+            .frame(width: width ?? (axis == .vertical ? min(59, dockWidth * scale) : 59), height: 28)
             .background(Capsule().fill(Color(nsColor: .controlAccentColor)))
             .contentShape(Capsule())
             .onTapGesture { editing.end() }

@@ -37,7 +37,7 @@ private func authorDock(_ s: Dockduo.Settings) {
 // Un Dock così, in una finestra mai mostrata.
 @MainActor private func hosted(_ box: DockBox, state: BarState, settings: Dockduo.Settings, editing: Editing) -> (NSView, NSWindow) {
     let icons = IconDragHooks(target: nil, dragging: nil, onDrag: { _, _, _, _ in }, onDrop: { _ in }, pillFrame: { _, _ in })
-    return inWindow(DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: settings, editing: editing))
+    return inWindow(DockBoxView(box: box, state: state, side: .left, icons: icons, settings: settings, editing: editing))
 }
 
 // Chi prende un clic di quel tipo, col ⌘ o senza, nel punto `p` della vista dall'alto. L'evento (lo legge hitTest) si dà
@@ -299,7 +299,7 @@ private final class EditPanel: NSPanel, EditWindow {}   // come la galleria (Tas
     #expect(shows())
 
     // Il tasto destro è il menu del vetro del Dock; il sinistro arriva al suo tocco (nessun menu lo prende), che entra in modifica.
-    let capsule = EmptyBarCapsule(display: 3, mirrored: false, editing: editing)
+    let capsule = EmptyBarCapsule(display: 3, side: .left, editing: editing)
     let (host, window) = inWindow(capsule)
     defer { NSApp.setValue(nil, forKey: "currentEvent") }
     let middle = CGPoint(x: host.bounds.midX, y: host.bounds.midY)
@@ -333,11 +333,11 @@ private final class EditPanel: NSPanel, EditWindow {}   // come la galleria (Tas
         let glass = RoundedRectangle(cornerRadius: dockRadius * scale).fill(fill).offset(x: -0.5 * dockUnit * scale)
         return VStack(spacing: 6 * scale) {
             ForEach(s.docks(in: z)) { box in
-                DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: s, editing: editing)
+                DockBoxView(box: box, state: state, side: .left, icons: icons, settings: s, editing: editing)
                     .background { if !box.isStatus { glass } }
             }
             if z == .middle, emptyBarCapsuleShows(docks: s.docks, state: state, settings: s, drop: DockDrop(settings: s), display: 1, editing: editing) {
-                EmptyBarCapsule(display: nil, mirrored: false, editing: editing).background { glass }
+                EmptyBarCapsule(display: nil, side: .left, editing: editing).background { glass }
             }
             if z == .bottom, editing.on { EditDoneButton() }
         }

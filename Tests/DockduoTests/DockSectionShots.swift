@@ -45,7 +45,7 @@ import Testing
     let icons = IconDragHooks(target: nil, dragging: nil, onDrag: { _, _, _, _ in }, onDrop: { _ in }, pillFrame: { _, _ in })
     return VStack(alignment: .leading, spacing: 8) {
         Text(title).font(.system(size: 10)).foregroundStyle(.secondary).fixedSize()
-        DockBoxView(box: DockBox(zone: .middle, sections: sections), state: state, mirrored: false, icons: icons, settings: settings)
+        DockBoxView(box: DockBox(zone: .middle, sections: sections), state: state, side: .left, icons: icons, settings: settings)
             .background { RoundedRectangle(cornerRadius: dockRadius * scale).fill(fill).offset(x: -0.5 * dockUnit * scale) }
             .environment(\.barScale, scale).modifier(SideLook())
             .frame(width: 52).padding(.leading, 2)

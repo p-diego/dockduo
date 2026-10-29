@@ -52,13 +52,14 @@ private func threeApps() -> [AppEntry] {
 
 // Un Dock con quelle sezioni a barra 52, le app nello stato della barra, cartelle e mensola da `settings` (una suite sua).
 @MainActor private func dockView(_ sections: [WidgetID], apps: [AppEntry] = [], settings: Dockduo.Settings, state: BarState = BarState(),
-                                 hover: DockHover? = nil, drop: DockDrop = .shared, display: CGDirectDisplayID = 1) -> NSHostingView<some View> {
+                                 hover: DockHover? = nil, drop: DockDrop = .shared, display: CGDirectDisplayID = 1,
+                                 axis: BarAxis = .vertical) -> NSHostingView<some View> {
     state.dock = apps
     let icons = IconDragHooks(target: nil, dragging: nil, onDrag: { _, _, _, _ in }, onDrop: { _ in }, pillFrame: { _, _ in })
     let box = DockBox(zone: .middle, sections: sections.map(BarItem.widget))
-    return NSHostingView(rootView: DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: settings, drop: drop,
+    return NSHostingView(rootView: DockBoxView(box: box, state: state, side: .left, icons: icons, settings: settings, drop: drop,
                                                display: display, hover: hover)
-        .environment(\.barScale, 52.0 / 38))
+        .environment(\.barScale, 52.0 / 38).environment(\.barAxis, axis))
 }
 
 // La linea sta fra due sezioni consecutive che mostrano qualcosa, mai in cima o in fondo (spec dock-contenitori §3): 2 + 31
@@ -106,6 +107,22 @@ private func threeApps() -> [AppEntry] {
     #expect(abs(both.width - 45) < 0.25 && abs(both.height - (bare + 2 + 15 + playing.height)) < 0.5)
 }
 
+// In basso il Dock è lo stesso, steso (spec app conclusa §3.2): le caselle in fila, largo quanto di lato era alto e alto
+// 45; la fascia della linea (6 + 1 + 6) sta lungo la fila, e In riproduzione è larga 31 come le icone.
+@MainActor @Test func theBottomDockLiesDown() throws {
+    _ = NSApplication.shared
+    let apps = threeApps()
+    try #require(apps.count == 3)
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let s = Dockduo.Settings(defaults: d), state = BarState()
+    state.track = Track(player: .music, title: "Song", artist: "Artist", playing: false)
+    let bare: CGFloat = 7 + 3 * 31 + 2 * 2 + 7
+    let alone = dockView([.apps], apps: apps, settings: s, axis: .horizontal).fittingSize
+    #expect(abs(alone.width - bare) < 0.5 && abs(alone.height - 45) < 0.25)
+    let both = dockView([.apps, .nowPlaying], apps: apps, settings: s, state: state, axis: .horizontal).fittingSize
+    #expect(abs(both.width - (bare + 2 + 15 + 31)) < 0.5 && abs(both.height - 45) < 0.25)
+}
+
 // Review Focus 2: un Dock senza niente da mostrare non prende posto, né capsula né linee (nessuna cartella, mensola vuota,
 // o un Dock appena fatto nelle Impostazioni, senza sezioni).
 @MainActor @Test func aDockWithNothingToShowTakesNoRoom() throws {
@@ -125,7 +142,7 @@ private func threeApps() -> [AppEntry] {
     func zone(_ docks: [[WidgetID]]) -> CGFloat {
         let boxes = docks.map { DockBox(zone: .middle, sections: $0.map(BarItem.widget)) }
         return NSHostingView(rootView: VStack(spacing: 6 * scale) {
-            ForEach(boxes) { DockBoxView(box: $0, state: state, mirrored: false, icons: icons, settings: s).inBar(grab: nil, pointer: 0) }
+            ForEach(boxes) { DockBoxView(box: $0, state: state, side: .left, icons: icons, settings: s).inBar(grab: nil, pointer: 0) }
         }.environment(\.barScale, scale)).fittingSize.height
     }
     let one = zone([[.nowPlaying]])
@@ -317,14 +334,26 @@ private func threeApps() -> [AppEntry] {
 // stretto della barra e il suo bordo si muove meno: lo stesso trascinamento allarga di più.
 @Test func draggingTheLineResizesTheDock() {
     let scale: CGFloat = 52.0 / 38
-    #expect(lineDragWidth(start: 52, scale: scale, dx: 9.33, side: .left) == 62)
-    #expect(lineDragWidth(start: 52, scale: scale, dx: -9.33, side: .right) == 62)
-    #expect(lineDragWidth(start: 52, scale: scale, dx: -9.33, side: .left) == 42)
-    #expect(lineDragWidth(start: 52, scale: scale, dx: 9.33, side: .right) == 42)
-    #expect(lineDragWidth(start: 52, scale: scale, dx: 0.3, side: .left) == 52)
-    #expect(lineDragWidth(start: 52, scale: scale, dx: 1000, side: .left) == 150)
-    #expect(lineDragWidth(start: 52, scale: scale, dx: -100, side: .left) == 38)
-    #expect(lineDragWidth(start: 52, scale: scale / 2, dx: 10, side: .left) == 66)   // il bordo a (1 + 22,5/52)/2 per punto
+    func drag(_ dx: CGFloat, _ side: Side, dy: CGFloat = 0, scale: CGFloat = scale) -> Double {
+        lineDragWidth(start: 52, scale: scale, delta: CGSize(width: dx, height: dy), side: side)
+    }
+    #expect(drag(9.33, .left) == 62 && drag(-9.33, .right) == 62)
+    #expect(drag(-9.33, .left) == 42 && drag(9.33, .right) == 42)
+    #expect(drag(0.3, .left) == 52 && drag(0, .left, dy: 30) == 52)   // di lato su e giù non conta
+    #expect(drag(1000, .left) == 150 && drag(-100, .left) == 38)
+    #expect(drag(10, .left, scale: scale / 2) == 66)   // il bordo a (1 + 22,5/52)/2 per punto
+}
+
+// In basso la linea si trascina in su e in giù (spec app conclusa §3.2), sullo schermo: in su più grande, in giù più
+// piccola, con gli stessi passi e limiti dei lati; di lato non conta.
+@Test func theBottomResizeGoesUp() {
+    let scale: CGFloat = 52.0 / 38
+    func up(_ dy: CGFloat, dx: CGFloat = 0) -> Double {
+        lineDragWidth(start: 52, scale: scale, delta: CGSize(width: dx, height: dy), side: .bottom)
+    }
+    #expect(up(9.33) == 62 && up(-9.33) == 42)
+    #expect(up(20) == 73 && up(-20) == 38)
+    #expect(up(1000) == 150 && up(0, dx: 50) == 52)
 }
 
 // Riduci usando è l'impostazione del Dock di macOS (com.apple.dock, mineffect): senza, il genio.
@@ -466,7 +495,7 @@ private func threeApps() -> [AppEntry] {
     func zone(_ z: Zone) -> some View {
         VStack(spacing: 6 * scale) {
             ForEach(docks.filter { $0.zone == z }) { box in
-                DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: settings)
+                DockBoxView(box: box, state: state, side: .left, icons: icons, settings: settings)
                     .background { if !box.isStatus { RoundedRectangle(cornerRadius: dockRadius * scale).fill(Color(red: 13 / 255, green: 14 / 255, blue: 20 / 255)).offset(x: -0.5 * dockUnit * scale) } }
             }
         }

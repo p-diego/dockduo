@@ -53,7 +53,7 @@ private func target(_ x: CGFloat, _ y: CGFloat) -> String? { iconDropTarget(at: 
     for scale in [52.0 / 38, 52.0 / 38 / 2] {
         pill = nil
         let host = NSHostingView(rootView: DockBoxView(box: DockBox(zone: .middle, sections: [.widget(.workspaces)]), state: state,
-                                                       mirrored: false, icons: icons, settings: Dockduo.Settings(defaults: d))
+                                                       side: .left, icons: icons, settings: Dockduo.Settings(defaults: d))
             .environment(\.barScale, scale).coordinateSpace(name: "bar"))
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: host.fittingSize), styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView = host

@@ -23,7 +23,7 @@ struct SideBarView: View {
         let here = current
         // Il pannello spento (dopo un cambio sinistra/destra, a opacità 0) non disegna niente: nessun Dock.
         let docks = side == settings.barSide ? arranged(here) : []   // i Dock salvati o, mentre trascini su questo schermo, l'anteprima
-        FittedZones(bar: place.bar.height, scale: scale) {
+        FittedZones(bar: side.axis.along(place.bar.size), scale: scale) {
             zone($0, docks, $1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -60,31 +60,32 @@ struct SideBarView: View {
         .simultaneousGesture(rearrange)
         .coordinateSpace(name: "bar")
         .overlay(alignment: .topLeading) { IconDragCopy(drag: icons.drag) }   // l'icona trascinata
+        .environment(\.barAxis, side.axis)
         .modifier(SideLook())
     }
 
     // La larghezza della barra in scala (38 = 1), senza restringere: i Dock prendono la loro da FittedZones.
     private var scale: CGFloat { settings.sideWidth / 38 }
 
-    // Una zona alla scala dei Dock (`scale`, già ristretta): i suoi Dock in colonna, a 6 l'uno dall'altro come le pillole di
-    // prima. Un Dock senza niente da mostrare non disegna niente (DockBoxView), quindi non prende neanche il distacco. In
-    // modifica, subito sotto l'ultimo Dock della barra (autore, 27/10), Fine: con la sua zona, così si restringe con i Dock se
-    // non ci stanno; senza Dock, al centro. Una sezione in mano
+    // Una zona alla scala dei Dock (`scale`, già ristretta): i suoi Dock in colonna (in basso in fila), a 6 l'uno dall'altro
+    // come le pillole di prima. Un Dock senza niente da mostrare non disegna niente (DockBoxView), quindi non prende neanche il
+    // distacco. In modifica, subito dopo l'ultimo Dock della barra (sotto, autore 27/10; in basso a destra), Fine: con la sua
+    // zona, così si restringe con i Dock se non ci stanno; senza Dock, al centro. Una sezione in mano
     // che qui farebbe un Dock nuovo apre il suo posto fra i Dock: lei col margine di una capsula. Una barra dove non si vede
     // niente ha al centro la capsula vuota del Dock, da cliccare (emptyBarCapsuleShows).
     private func zone(_ zone: Zone, _ docks: [DockBox], _ scale: CGFloat) -> some View {
         let column = docks.filter { $0.zone == zone }
         let room: Int? = if case .newDock(zone, let at)? = sectionHover?.target { at } else { nil }
-        let space = Color.clear.frame(height: roomHeight(scale) + 14 * dockUnit * scale).transition(.opacity)
+        let space = Color.clear.frame(side.axis, along: roomHeight(scale) + 14 * dockUnit * scale).transition(.opacity)
         let empty = zone == .middle && side == settings.barSide && emptyBarCapsuleShows(docks: docks, state: state, display: place.display)
         let doneZone = Zone.allCases.last { z in docks.contains { $0.zone == z } } ?? .middle
-        return VStack(spacing: 6 * scale) {
+        return BarStack(spacing: 6) {
             ForEach(column) { box in
                 if room == column.firstIndex(of: box) { space }
                 dock(box, scale)
             }
             if let room, room >= column.count { space }
-            if empty { EmptyBarCapsule(display: place.display, mirrored: side == .right).transition(.blurReplace) }
+            if empty { EmptyBarCapsule(display: place.display, side: side).transition(.blurReplace) }
             if zone == doneZone, Editing.shared.on, side == settings.barSide { EditDoneButton().transition(.opacity) }
         }
         .animation(.smooth(duration: 0.3), value: Editing.shared.on)
@@ -98,7 +99,7 @@ struct SideBarView: View {
     // (inBar); se ha sopra un trascinamento, glielo dà. `scale`: quella della zona (già ristretta), per il posto che si apre.
     private func dock(_ box: DockBox, _ scale: CGFloat) -> some View {
         // Il trascina icone in colonna: le pillole spazio sono righe, lo spessore è la larghezza della barra.
-        DockBoxView(box: box, state: state, mirrored: side == .right, icons: icons.hooks(state, thickness: settings.sideWidth),
+        DockBoxView(box: box, state: state, side: side, icons: icons.hooks(state, thickness: settings.sideWidth),
                     onFrame: { frames[box.id] = $0; rest(box.id, $0) },
                     onTile: rest, onSection: { item, frame in if !frozen { sectionFrames[item] = frame } },
                     display: place.display, hover: hover?.dock == box.id ? hover : nil, room: room(in: box, scale))
@@ -121,10 +122,10 @@ struct SideBarView: View {
         guard case .into(box.id, let at)? = sectionHover?.target else { return nil }
         return (at, roomHeight(scale))
     }
-    // Alto quanto lei, a riposo; dalla galleria (in nessun Dock) quanto una casella del Dock alla scala della zona (`scale`,
+    // Lungo quanto lei, a riposo; dalla galleria (in nessun Dock) quanto una casella del Dock alla scala della zona (`scale`,
     // ristretta coi Dock se la barra è piena).
     private func roomHeight(_ scale: CGFloat) -> CGFloat {
-        DockDrop.shared.movingSection.flatMap { sectionFrames[$0]?.height } ?? dockIcon * scale
+        DockDrop.shared.movingSection.flatMap { sectionFrames[$0].map { side.axis.along($0.size) } } ?? dockIcon * scale
     }
 
     // Dove cadrebbe la sezione in mano (sectionTarget), sulle cornici a riposo dei Dock e delle loro sezioni; le zone sono i
@@ -220,7 +221,8 @@ extension View {
     }
 }
 
-// Le tre zone con una scala sola per tutti i Dock quando la barra (`bar`) non li tiene (spec dock-contenitori §5). Ogni
+// Le tre zone con una scala sola per tutti i Dock quando la barra (`bar`, la sua lunghezza) non li tiene (spec
+// dock-contenitori §5). Le misure sono lungo la barra (barAxis): altezze di lato, larghezze in basso. Ogni
 // zona si misura alla scala con cui si è disegnata e si riporta a scala 1: così l'altezza naturale quasi non dipende dalla
 // scala di adesso, e barFit la dà giusta per il disegno dopo (per un disegno i Dock hanno la grandezza di prima). Quasi: il
 // testo cresce a passi, quindi la scala scende subito e risale solo fin dove ci si starebbe anche col margine del testo
@@ -230,14 +232,16 @@ struct FittedZones<Content: View>: View {
     let bar: CGFloat
     let scale: CGFloat
     @ViewBuilder let zone: (Zone, CGFloat) -> Content
-    @State private var heights: [Zone: CGFloat] = [:]   // a scala 1
+    @Environment(\.barAxis) private var axis
+    @State private var heights: [Zone: CGFloat] = [:]   // a scala 1, lungo la barra
     @State private var fit: CGFloat = 1
 
     var body: some View {
         let drawn = max(fit, 0.001), fitted = scale * fit   // la scala di questo disegno, quella delle misure che darà
-        SideZones(gap: 6 * fitted) {
+        let axis = self.axis
+        SideZones(gap: 6 * fitted, axis: axis) {
             ForEach(Zone.allCases, id: \.self) { z in
-                zone(z, fitted).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights[z] = $0 / drawn }
+                zone(z, fitted).onGeometryChange(for: CGFloat.self) { axis.along($0.size) } action: { heights[z] = $0 / drawn }
             }
         }
         .environment(\.barScale, fitted)
@@ -256,21 +260,26 @@ struct FittedZones<Content: View>: View {
 // ricordare la scala più bassa che sbordava e non risalirci finché il contenuto non cambia.
 private let fitRiseMargin: CGFloat = 0.02
 
-// Le tre zone (cima, mezzo, fondo) alla loro altezza naturale, al centro in larghezza, dove dice sideZoneTops: mai una
-// sopra l'altra.
+// Le tre zone (cima, mezzo, fondo) alla loro lunghezza naturale, al centro attraverso la barra, dove dice sideZoneTops: mai
+// una sopra l'altra. In basso la cima è a sinistra e il fondo a destra.
 private struct SideZones: Layout {
     let gap: CGFloat
+    let axis: BarAxis
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let h = subviews.map { $0.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height }
-        let tops = sideZoneTops(bar: bounds.height, top: h[0], middle: h[1], bottom: h[2], gap: gap)
-        for (i, y) in [0, tops.middle, tops.bottom].enumerated() {
-            subviews[i].place(at: CGPoint(x: bounds.midX, y: bounds.minY + y), anchor: .top,
-                              proposal: ProposedViewSize(width: bounds.width, height: h[i]))
+        let vertical = axis == .vertical
+        func proposed(_ along: CGFloat?) -> ProposedViewSize {
+            vertical ? ProposedViewSize(width: bounds.width, height: along) : ProposedViewSize(width: along, height: bounds.height)
+        }
+        let h = subviews.map { axis.along($0.sizeThatFits(proposed(nil))) }
+        let tops = sideZoneTops(bar: axis.along(bounds.size), top: h[0], middle: h[1], bottom: h[2], gap: gap)
+        for (i, t) in [0, tops.middle, tops.bottom].enumerated() {
+            let at = vertical ? CGPoint(x: bounds.midX, y: bounds.minY + t) : CGPoint(x: bounds.minX + t, y: bounds.midY)
+            subviews[i].place(at: at, anchor: vertical ? .top : .leading, proposal: proposed(h[i]))
         }
     }
 }

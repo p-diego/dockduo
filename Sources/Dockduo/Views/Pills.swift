@@ -33,12 +33,13 @@ struct Pill: ViewModifier {
     var dock = false           // la capsula del Dock: larga come quella di macOS (dockWidth) e col suo vetro
     @Environment(\.mergedPill) private var merged
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
 
     func body(content: Content) -> some View {
         if merged {
-            content.frame(width: 26 * scale).frame(minHeight: 26 * scale).contentShape(Rectangle())
+            content.frame(axis, across: 26 * scale).frame(axis, minAlong: 26 * scale).contentShape(Rectangle())
         } else {
-            content.padding(.vertical, padding * scale).frame(width: (dock ? dockWidth : 26) * scale).modifier(PillBackground(dock: dock))
+            content.padding(axis.ends, padding * scale).frame(axis, across: (dock ? dockWidth : 26) * scale).modifier(PillBackground(dock: dock))
         }
     }
 }
@@ -50,13 +51,50 @@ struct WorkspacesRow<Content: View>: View {
     var body: some View { BarStack(spacing: 2 * 26 / 31, content: content) }
 }
 
-// Una fila lungo la barra, in colonna; la spaziatura in scala (barScale).
+// Una fila lungo la barra: in colonna di lato, in fila in basso (barAxis); la spaziatura in scala (barScale).
 struct BarStack<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: () -> Content
     @Environment(\.barScale) private var scale
+    @Environment(\.barAxis) private var axis
 
-    var body: some View { VStack(spacing: spacing * scale, content: content) }
+    var body: some View {
+        let layout = axis == .vertical ? AnyLayout(VStackLayout(spacing: spacing * scale)) : AnyLayout(HStackLayout(spacing: spacing * scale))
+        layout(content)
+    }
+}
+
+// Un solo modello per i tre lati (spec app conclusa §3.3): le viste dicono "lungo la barra" e "attraverso la barra", e
+// l'asse della barra (SideBarView, dal suo lato) dice quale è l'altezza e quale la larghezza. Di lato è tutto com'era.
+extension EnvironmentValues {
+    @Entry var barAxis: BarAxis = .vertical
+}
+
+extension BarAxis {
+    var ends: Edge.Set { self == .vertical ? .vertical : .horizontal }   // i due capi lungo la barra
+    var start: Edge.Set { self == .vertical ? .top : .leading }          // il primo dei due
+    func along(_ size: CGSize) -> CGFloat { self == .vertical ? size.height : size.width }
+}
+
+extension Side {
+    // `d` verso il bordo dello schermo: il mezzo punto del Dock e dello Stato (DockBoxView).
+    func towardEdge(_ d: CGFloat) -> CGSize {
+        switch self {
+        case .left: CGSize(width: -d, height: 0)
+        case .right: CGSize(width: d, height: 0)
+        case .bottom: CGSize(width: 0, height: d)
+        }
+    }
+}
+
+extension View {
+    // Una cornice lungo e attraverso la barra: attraverso è la larghezza in colonna, l'altezza in fila.
+    func frame(_ axis: BarAxis, along: CGFloat? = nil, across: CGFloat? = nil, alignment: Alignment = .center) -> some View {
+        axis == .vertical ? frame(width: across, height: along, alignment: alignment) : frame(width: along, height: across, alignment: alignment)
+    }
+    func frame(_ axis: BarAxis, minAlong: CGFloat? = nil, maxAcross: CGFloat? = nil) -> some View {
+        axis == .vertical ? frame(maxWidth: maxAcross, minHeight: minAlong) : frame(minWidth: minAlong, maxHeight: maxAcross)
+    }
 }
 
 // Lo sfondo di ogni pillola, widget e spazi: il vetro. Sul Dock quello del Dock di macOS (dockGlass, 25/10: «deve essere

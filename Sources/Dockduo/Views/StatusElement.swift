@@ -48,7 +48,7 @@ func wifiDots(_ w: WiFi?) -> Int {
 
 struct StatusElement: View {
     let state: BarState
-    var mirrored = false   // barra a destra: il bordo dello schermo è a destra
+    var side = Side.left   // dove sta il bordo dello schermo (il mezzo punto verso di lui)
     var fixedTime: Date? = nil   // la prova a occhio accanto al riferimento: le 2:59
     @Environment(\.barScale) private var scale
 
@@ -78,7 +78,7 @@ struct StatusElement: View {
         .shadow(color: .black.opacity(0.1), radius: 1.5 * u)
         .overlay(MenuAnchor { StatusMenuView() })
         // Sulla colonna del Dock, come sull'iPhone: mezzo punto verso il bordo dello schermo, come la sua capsula (DockBoxView).
-        .offset(x: (mirrored ? 0.5 : -0.5) * u)
+        .offset(side.towardEdge(0.5 * u))
         .animation(.smooth(duration: 0.3), value: state.battery)
         .animation(.smooth(duration: 0.3), value: state.wifi)
     }

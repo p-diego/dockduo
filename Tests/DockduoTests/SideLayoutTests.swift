@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import SwiftUI
 import Testing
 @testable import Dockduo
 
@@ -29,6 +30,25 @@ private let apps = BarItem.widget(.apps), nowPlaying = BarItem.widget(.nowPlayin
     #expect(up.middle == 94 && up.bottom == 600)   // 94 + 500 + 6 = 600, sopra il fondo
     let over = sideZoneTops(bar: 1000, top: 300, middle: 600, bottom: 100, gap: 6)
     #expect(over.middle == 306 && over.bottom == 912)   // la cima resta libera, il fondo esce di 12
+}
+
+// In basso le zone sono sinistra, centro e destra (spec app conclusa §3.2): la stessa regola (sideZoneTops) lungo la
+// larghezza, e al centro in altezza. I dati non cambiano: la cima è a sinistra.
+@MainActor @Test func theBottomZonesGoLeftCentreRight() {
+    _ = NSApplication.shared
+    final class Seen { var frames: [Zone: CGRect] = [:] }
+    let seen = Seen(), widths: [Zone: CGFloat] = [.top: 100, .middle: 300, .bottom: 100]
+    let view = FittedZones(bar: 1000, scale: 1) { z, _ in
+        Color.clear.frame(width: widths[z]!, height: 20)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("bar")) } action: { seen.frames[z] = $0 }
+    }
+    let host = NSHostingView(rootView: view.environment(\.barAxis, .horizontal).frame(width: 1000, height: 52).coordinateSpace(name: "bar"))
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 52), styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    for _ in 0..<5 { host.layoutSubtreeIfNeeded(); RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+    #expect(seen.frames == [.top: CGRect(x: 0, y: 16, width: 100, height: 20), .middle: CGRect(x: 350, y: 16, width: 300, height: 20),
+                            .bottom: CGRect(x: 900, y: 16, width: 100, height: 20)])
+    withExtendedLifetime(window) {}
 }
 
 @Test func sideSettingsDefaultAndReadBack() throws {

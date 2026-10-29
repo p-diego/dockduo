@@ -229,7 +229,7 @@ private func look(_ docks: [DockBox]) -> [[[BarItem]]] { Zone.allCases.map { z i
     let box = DockBox(zone: .middle, sections: w(.apps, .folders, .shelf, .nowPlaying))
     let icons = IconDragHooks(target: nil, dragging: nil, onDrag: { _, _, _, _ in }, onDrop: { _ in }, pillFrame: { _, _ in })
     func height(_ room: (at: Int, height: CGFloat)?) -> CGFloat {
-        NSHostingView(rootView: DockBoxView(box: box, state: BarState(), mirrored: false, icons: icons, settings: s, drop: DockDrop(settings: s),
+        NSHostingView(rootView: DockBoxView(box: box, state: BarState(), side: .left, icons: icons, settings: s, drop: DockDrop(settings: s),
                                            editing: editing, room: room).environment(\.barScale, 52.0 / 38)).fittingSize.height
     }
     let plain = height(nil), u = dockUnit * 52 / 38
@@ -256,7 +256,7 @@ private func look(_ docks: [DockBox]) -> [[[BarItem]]] { Zone.allCases.map { z i
     for (file, dark) in [("sezione-in-mano-scuro", true), ("sezione-in-mano-chiaro", false)] {
         let fill = dark ? Color(red: 13 / 255, green: 14 / 255, blue: 20 / 255) : Color(red: 0.93, green: 0.93, blue: 0.95)
         func dock(_ drop: DockDrop, _ room: (at: Int, height: CGFloat)?) -> some View {
-            DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: s, drop: drop, editing: editing, room: room)
+            DockBoxView(box: box, state: state, side: .left, icons: icons, settings: s, drop: drop, editing: editing, room: room)
                 .background { RoundedRectangle(cornerRadius: dockRadius * scale).fill(fill).offset(x: -0.5 * dockUnit * scale) }
                 .environment(\.barScale, scale).modifier(SideLook()).environment(\.colorScheme, dark ? .dark : .light)
                 .frame(width: 52).padding(.leading, 2).frame(width: 90, alignment: .leading)

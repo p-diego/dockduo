@@ -57,8 +57,8 @@ import Testing
     let icons = IconDragHooks(target: nil, dragging: nil, onDrag: { _, _, _, _ in }, onDrop: { _ in }, pillFrame: { _, _ in })
     let box = DockBox(zone: .top, sections: [.widget(.status)])
     let view = HStack(spacing: 0) {
-        DockBoxView(box: box, state: state, mirrored: false, icons: icons, settings: Settings(defaults: d)).frame(width: 52, height: 60)
-        StatusElement(state: state, mirrored: false).frame(width: 52, height: 60)
+        DockBoxView(box: box, state: state, side: .left, icons: icons, settings: Settings(defaults: d)).frame(width: 52, height: 60)
+        StatusElement(state: state, side: .left).frame(width: 52, height: 60)
     }
     .environment(\.barScale, 52 / 38).modifier(SideLook())
     let host = NSHostingView(rootView: view)
