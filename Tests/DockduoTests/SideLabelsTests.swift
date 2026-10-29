@@ -57,17 +57,33 @@ struct SideLabelsTests {
         items["dock"] = SideLabel(text: "Code", style: .dockName, anchor: row)
         #expect(coveredLabels(items, axis: .vertical) == ["front", "agent-7"])
     }
-    // In basso la stessa prova girata (alongBar): un testo solo sopra ogni icona, quindi per colonna. Due testi sulla stessa
-    // colonna non si sovrappongono (uno è coperto); quelli delle icone vicine, tutti alla stessa altezza, restano.
-    @Test func bottomLabelsDontCover() {
-        let column = CGRect(x: 10, y: 3, width: 31, height: 45), icon = CGRect(x: 10, y: 10, width: 31, height: 31)
-        let next = column.offsetBy(dx: 33, dy: 0)
-        var items: [String: SideLabel] = ["front": SideLabel(text: "Code", style: .glass, anchor: icon),
-                                          "agent-7": SideLabel(text: "Waiting for you", style: .agent(color: nil), anchor: icon),
-                                          "agent-8": SideLabel(text: "Finished", style: .agent(color: nil), anchor: next)]
-        #expect(coveredLabels(items, axis: .horizontal) == ["front"])
-        items["dock"] = SideLabel(text: "Code", style: .dockName, anchor: column)
-        #expect(coveredLabels(items, axis: .horizontal) == ["front", "agent-7"])
+    // Una regola per i due assi: un testo che lungo la barra si sovrappone di più di un punto a uno in vista che conta di
+    // più resta coperto. In basso i testi sono larghi e le icone a 33: due vicini più larghi del passo, si vede solo quello
+    // che conta di più (il nome del Dock, poi gli agenti, a parità l'id); lontani, tutti e due. Il tratto è quello del testo
+    // appoggiato al bordo vicino al capo della barra (labelCentre). Di lato due testi alti 26 su icone a 25,85 (gli spazi
+    // nel Dock a barra 52) si toccano appena: restano tutti e due.
+    @Test func bottomLabelsCoverTheirNeighbours() {
+        func at(_ x: CGFloat) -> CGRect { CGRect(x: x, y: 4, width: 31, height: 45) }
+        func agent(_ x: CGFloat) -> SideLabel { SideLabel(text: "Waiting for you", style: .agent(color: nil), anchor: at(x)) }
+        let lengths: [String: CGFloat] = ["agent-7": 120, "agent-8": 120, "dock": 60, "front": 30]
+        func covered(_ items: [String: SideLabel]) -> Set<String> { coveredLabels(items, axis: .horizontal, lengths: lengths, panel: 1000) }
+        #expect(covered(["agent-7": agent(200), "agent-8": agent(233)]) == ["agent-8"])
+        #expect(covered(["agent-7": agent(200), "agent-8": agent(400)]).isEmpty)
+        #expect(covered(["agent-7": agent(200), "dock": SideLabel(text: "Mail", style: .dockName, anchor: at(233))]) == ["agent-7"])
+        #expect(covered(["agent-7": agent(0), "front": SideLabel(text: "Code", style: .glass, anchor: at(95))]) == ["front"])
+        let icon = CGRect(x: 10, y: 100, width: 24, height: 24), next = icon.offsetBy(dx: 0, dy: 25.85)
+        #expect(coveredLabels(["agent-7": SideLabel(text: "Waiting for you", style: .agent(color: nil), anchor: icon),
+                               "agent-8": SideLabel(text: "Finished", style: .agent(color: nil), anchor: next)],
+                              axis: .vertical, lengths: ["agent-7": 26, "agent-8": 26], panel: 1000).isEmpty)
+    }
+    // In basso un testo vicino a un capo della barra resta tutto nel pannello, appoggiato al bordo, come i nomi del Dock di
+    // macOS: il testo comincia 13 dentro la capsula, quindi l'inchiostro sta a 13 dai bordi.
+    @MainActor @Test func bottomLabelsStayInsideThePanel() throws {
+        let labels = SideLabels()
+        labels.show(SideLabels.dock, SideLabel(text: "System Settings", style: .dockName, anchor: CGRect(x: 0, y: 4, width: 31, height: 45)))
+        labels.show("agent-1", SideLabel(text: "Waiting for you", style: .agent(color: nil), anchor: CGRect(x: 369, y: 4, width: 31, height: 45)))
+        let ink = try inkBounds(SideLabelsView(labels: labels, side: .bottom), size: CGSize(width: 400, height: 360))
+        #expect(ink.minX >= 12 && ink.maxX <= 388, "\(ink)")
     }
     // In basso i nomi stanno sopra le icone (spec app conclusa §3.2), come nel Dock di macOS in basso: il nome di una voce
     // centrato sulla sua x, il fondo a dockNameGap dal lato del pannello che tocca la barra, quindi sopra la barra.

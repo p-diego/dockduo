@@ -11,13 +11,13 @@ import UniformTypeIdentifiers
 // Dove cade un rilascio: sulla mensola, o fra le cartelle davanti a quella con quell'id (nil: in fondo).
 enum DockSpot: Equatable { case shelf, folders(before: UUID?) }
 
-// Fra le cartelle (le loro cornici dall'alto, nell'ordine del Dock): prima di tutte quelle col centro sotto il puntatore.
-// Sopra le app o sulla linea: la prima.
+// Fra le cartelle (le loro cornici lungo la barra dal suo inizio, nell'ordine del Dock): prima di tutte quelle col centro
+// dopo il puntatore. Prima di loro, sulle app o sulla linea: la prima.
 func folderDropIndex(y: CGFloat, folderFrames: [CGRect]) -> Int { folderFrames.filter { $0.midY < y }.count }
 
-// Dalla cima della prima voce della mensola in giù è la mensola; `shelfTop` nil (un Dock senza Mensola, o una cartella del
-// Dock che cambia posto): sempre fra le cartelle. `folders` nil, un Dock senza Cartelle: sempre sulla mensola, anche
-// sopra la sua prima voce, mai fra le cartelle di un altro Dock (dockDropRule).
+// Lungo la barra, dall'inizio della prima voce della mensola in poi è la mensola; `shelfTop` nil (un Dock senza Mensola, o
+// una cartella del Dock che cambia posto): sempre fra le cartelle. `folders` nil, un Dock senza Cartelle: sempre sulla
+// mensola, anche prima della sua prima voce, mai fra le cartelle di un altro Dock (dockDropRule).
 func dockSpot(y: CGFloat, folders: [(id: UUID, frame: CGRect)]?, shelfTop: CGFloat?) -> DockSpot {
     guard let folders else { return .shelf }
     if let shelfTop, y >= shelfTop { return .shelf }
@@ -53,10 +53,10 @@ func dockTakes(_ box: DockBox, from source: DockDrop.Source?) -> Bool {
     }
 }
 
-// Dove cadrebbe una sezione trascinata sulla barra (in modifica), dall'altezza `y` nello spazio "bar", sulle cornici a riposo
-// dei Dock e delle loro sezioni, in ordine (.null: non si vede). Dentro un Dock al posto fra le sue sezioni, come fra le
-// cartelle (folderDropIndex); fuori dai Dock un Dock nuovo nella zona di quell'altezza (`zones`: i terzi della barra, come
-// il ⌘-trascina), dopo i Dock della zona sopra il puntatore. Fuori dalla barra niente.
+// Dove cadrebbe una sezione trascinata sulla barra (in modifica), dal punto `y` lungo la barra (alongBar) nello spazio
+// "bar", sulle cornici a riposo dei Dock e delle loro sezioni, in ordine (.null: non si vede). Dentro un Dock al posto fra
+// le sue sezioni, come fra le cartelle (folderDropIndex); fuori dai Dock un Dock nuovo nella zona di quel punto (`zones`: i
+// terzi della barra, come il ⌘-trascina), dopo i Dock della zona prima del puntatore. Fuori dalla barra niente.
 func sectionTarget(at y: CGFloat, docks: [(box: DockBox, frame: CGRect, sections: [CGRect])], zones: [Zone: CGRect]) -> SectionTarget? {
     func spans(_ r: CGRect) -> Bool { !r.isNull && r.minY <= y && y <= r.maxY }
     if let d = docks.first(where: { spans($0.frame) }) { return .into(dock: d.box.id, index: folderDropIndex(y: y, folderFrames: d.sections)) }
@@ -69,14 +69,14 @@ func sectionTarget(at y: CGFloat, docks: [(box: DockBox, frame: CGRect, sections
 // spazio "bar": senza nessun trascinamento sopra). Quello che ce l'ha già lo tiene finché il puntatore sta nella sua
 // cornice a riposo o in quella di adesso (`current`): allungandosi, e ricentrato dalla zona, non lo perde da solo.
 func hoveredDock(at p: CGPoint, docks: [UUID], resting: [UUID: CGRect], current: [UUID: CGRect], hovered: UUID?) -> UUID? {
-    // All'altezza del Dock, su tutta la larghezza della barra: anche accanto alla capsula, nel margine, conta come sopra.
+    // Nel tratto del Dock lungo la barra, su tutto lo spessore della barra: anche accanto alla capsula, nel margine, conta come sopra.
     func spans(_ r: CGRect?) -> Bool { r.map { $0.minY <= p.y && p.y <= $0.maxY } ?? false }
     if let hovered, docks.contains(hovered), spans(resting[hovered]) || spans(current[hovered]) { return hovered }
     return docks.first { spans(resting[$0]) }
 }
 
 extension Settings {
-    // Dove cadrebbe un rilascio a quell'altezza in quel Dock (dockSpot), sulle cornici a riposo delle sue voci (`resting`,
+    // Dove cadrebbe un rilascio a quel punto lungo la barra in quel Dock (dockSpot), sulle cornici a riposo delle sue voci (`resting`,
     // spazio "bar") e nelle sue sezioni: senza Cartelle sulla mensola, e non si apre nessun posto; senza Mensola, e per la
     // cartella che cambia posto, sempre fra le cartelle. Se no la mensola comincia dalla sua prima voce, o dalla casella
     // vuota; vuota e senza la casella a riposo, dove finisce il Dock a riposo: è lì che la casella lo allunga.

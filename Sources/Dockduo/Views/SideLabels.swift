@@ -17,6 +17,10 @@ struct SideLabel: Equatable {
     var text: String
     var style: SideLabelStyle
     var anchor: CGRect   // la pillola, nello spazio "bar" della sua barra
+
+    // Il centro della sua voce lungo la barra (alongBar). Il nome del Dock di lato mezzo punto più su, come lì; in basso
+    // centrato sulla voce.
+    func along(_ axis: BarAxis) -> CGFloat { alongBar(anchor, axis).midY - (style == .dockName && axis == .vertical ? 0.5 : 0) }
 }
 
 // Uno per barra di lato: gli id ("front", "nowPlaying", "dock", "agent-<pid>") valgono dentro una barra.
@@ -117,26 +121,31 @@ struct SideLabelsView: View {
     @Environment(\.palette) private var palette
     @Environment(\.barScale) private var scale
     private let settings = Settings.shared
+    // Quanto è lungo ogni testo lungo la barra, misurato: per sapere chi si sovrappone (coveredLabels).
+    // shortcut: le misure dei testi andati via restano (un numero per app che ha avuto un agente); se dovesse contare,
+    // toglierle quando il testo se ne va.
+    @State private var lengths: [String: CGFloat] = [:]
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                let axis = side.axis, covered = coveredLabels(labels.items, axis: axis)
+                let axis = side.axis
+                let covered = coveredLabels(labels.items, axis: axis, lengths: lengths, panel: axis.along(geo.size))
                 let across = alongBar(CGRect(origin: .zero, size: geo.size), axis).width   // il pannello attraverso la barra
                 ForEach(labels.items.sorted { $0.key < $1.key }, id: \.key) { id, label in
                     let dock = label.style == .dockName   // compare, cambia voce e sparisce di colpo, come nel Dock di macOS
-                    // Il nome del Dock di lato mezzo punto più su, come lì; in basso centrato sulla voce.
-                    let along = alongBar(label.anchor, axis).midY - (dock && axis == .vertical ? 0.5 : 0)
-                    view(label)
-                        // il vuoto fra barra e testo; il nome del Dock dal vetro del Dock
-                        .padding(toBar.edge, dock ? dockNameGap(anchor: label.anchor, barWidth: settings.sideWidth, side: side) : 8)
-                        .frame(axis, across: across, alignment: toBar.alignment)
-                        .position(alongBar(CGPoint(x: across / 2, y: along), axis))
-                        .transition(dock ? .identity : .scale(scale: 0.5, anchor: toBar.anchor).combined(with: .opacity))
-                        .transaction { if dock { $0.animation = nil } }
-                        // Coperto dal nome del Dock (coveredLabels) se ne va e torna di colpo come lui, senza animarsi sotto.
-                        .opacity(covered.contains(id) ? 0 : 1)
-                        .transaction(value: covered.contains(id)) { $0.animation = nil }
+                    LabelPlace(along: label.along(axis), axis: axis) {
+                        view(label)
+                            .onGeometryChange(for: CGFloat.self) { axis.along($0.size) } action: { lengths[id] = $0 }
+                            // il vuoto fra barra e testo; il nome del Dock dal vetro del Dock
+                            .padding(toBar.edge, dock ? dockNameGap(anchor: label.anchor, barWidth: settings.sideWidth, side: side) : 8)
+                            .frame(axis, across: across, alignment: toBar.alignment)
+                    }
+                    .transition(dock ? .identity : .scale(scale: 0.5, anchor: toBar.anchor).combined(with: .opacity))
+                    .transaction { if dock { $0.animation = nil } }
+                    // Coperto da un testo che conta di più (coveredLabels) se ne va e torna di colpo, senza animarsi sotto.
+                    .opacity(covered.contains(id) ? 0 : 1)
+                    .transaction(value: covered.contains(id)) { $0.animation = nil }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -169,15 +178,50 @@ struct SideLabelsView: View {
     }
 }
 
-// Accanto a un'icona un testo solo, o due capsule si sovrapporrebbero: prima il nome del Dock al passaggio del mouse (lo
-// chiedi tu), poi il testo dell'agente, poi gli altri (l'app davanti). Gli id di quelli coperti: restano, invisibili, e
-// tornano quando la riga si libera. La riga è il punto lungo la barra (alongBar): di lato l'altezza, in basso la colonna.
-func coveredLabels(_ items: [String: SideLabel], axis: BarAxis) -> Set<String> {
+// Un testo nel pannello, come .position: a metà attraverso la barra e, lungo, centrato su `along` ma sempre tutto dentro
+// (labelCentre), con la misura che ha adesso. Prende tutto il pannello.
+private struct LabelPlace: Layout {
+    let along: CGFloat
+    let axis: BarAxis
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let label = subviews.first else { return }
+        let panel = alongBar(bounds, axis), length = axis.along(label.sizeThatFits(proposal))
+        let centre = CGPoint(x: panel.midX, y: panel.minY + labelCentre(along, length: length, panel: panel.height))
+        label.place(at: alongBar(centre, axis), anchor: .center, proposal: proposal)
+    }
+}
+
+// Il centro di un testo lungo la barra: sulla sua voce (`along`), ma tutto dentro il pannello (lungo `panel`), come i nomi
+// del Dock di macOS, che non escono dallo schermo: vicino ai capi della barra in basso si appoggia al bordo. Di lato i
+// testi sono bassi e le voci lontane dai capi: non succede. Più lungo del pannello: al centro.
+func labelCentre(_ along: CGFloat, length: CGFloat, panel: CGFloat) -> CGFloat {
+    length >= panel ? panel / 2 : min(max(along, length / 2), panel - length / 2)
+}
+
+// Due testi non si sovrappongono: ognuno occupa lungo la barra il suo tratto (centrato come lo mette LabelPlace, lungo
+// quanto misurato, `lengths`; senza misura quanto è alto, 26, il meno che può essere), e chi si sovrappone di più di un
+// punto a un testo in vista che conta di più resta coperto. Prima il nome del Dock al passaggio del mouse (lo chiedi tu),
+// poi i testi degli agenti, poi gli altri (l'app davanti, la canzone). Una regola per i due assi: di lato i tratti sono le
+// altezze (26; quello di vetro 26 in scala, 35,6 a barra 52), e fra le voci del Dock a 33 si coprono solo sulla stessa
+// riga, fra le icone di uno spazio a 25,85 anche l'app davanti sotto l'agente della vicina; in basso le larghezze, a
+// colonne di 33: si coprono anche i vicini. Gli id di quelli coperti: restano, invisibili, e tornano quando il posto si
+// libera.
+func coveredLabels(_ items: [String: SideLabel], axis: BarAxis, lengths: [String: CGFloat] = [:], panel: CGFloat = .infinity) -> Set<String> {
     func rank(_ id: String) -> Int { id == SideLabels.dock ? 0 : id.hasPrefix("agent-") ? 1 : 2 }
-    var rows: [CGFloat] = [], covered: Set<String> = []
+    var shown: [ClosedRange<CGFloat>] = [], covered: Set<String> = []
     for (id, label) in items.sorted(by: { (rank($0.key), $0.key) < (rank($1.key), $1.key) }) {
-        let row = alongBar(label.anchor, axis).midY
-        if rows.contains(where: { abs($0 - row) < 1 }) { covered.insert(id) } else { rows.append(row) }
+        let length = lengths[id] ?? 26, centre = labelCentre(label.along(axis), length: length, panel: panel)
+        let span = centre - length / 2 ... centre + length / 2
+        if shown.contains(where: { min($0.upperBound, span.upperBound) - max($0.lowerBound, span.lowerBound) > 1 }) {
+            covered.insert(id)
+        } else {
+            shown.append(span)
+        }
     }
     return covered
 }

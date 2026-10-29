@@ -37,7 +37,9 @@ import Testing
 // La barra in basso, da guardare (BOTTOM_SHOTS=cartella, spec app conclusa §3.2): la striscia vera lungo tutto il bordo, alta
 // 71, a 2 dal bordo e dai lati, col Dock dell'autore, fuori e dentro la modifica, e sopra il pannello delle etichette
 // (labelPanelFrame) col nome della prima icona (Finder): il Dock al centro, 5 icone da 31, 2 fra l'una e l'altra, 7 per
-// capo, la capsula 45 alta mezzo punto verso il bordo (a barra 52, qui in scala).
+// capo, la capsula 45 alta mezzo punto verso il bordo (a barra 52, qui in scala). Ai due capi, dove starebbe la prima voce
+// di un Dock a sinistra e l'ultima di uno a destra, due testi d'agente: appoggiati ai bordi. Niente testi di vetro (l'app
+// davanti, la canzone): fuori dallo schermo il loro vetro fa sparire tutto il pannello dalla foto.
 @MainActor @Test(.enabled(if: ProcessInfo.processInfo.environment["BOTTOM_SHOTS"] != nil)) func bottomShots() async throws {
     _ = NSApplication.shared
     let out = URL(fileURLWithPath: ProcessInfo.processInfo.environment["BOTTOM_SHOTS"]!)
@@ -52,6 +54,9 @@ import Testing
     labels.show(SideLabels.dock, SideLabel(text: "Finder", style: .dockName,
                                            anchor: CGRect(x: shown.width / 2 - 177 / 2 * u + 7 * u, y: (71 - 45 * u) / 2 + 0.5 * u,
                                                           width: 31 * u, height: 45 * u)))
+    let ends = (CGRect(x: 7 * u, y: (71 - 45 * u) / 2 + 0.5 * u, width: 31 * u, height: 45 * u), shown.width - 38 * u)
+    labels.show("agent-1", SideLabel(text: "Waiting for you", style: .agent(color: nil), anchor: ends.0))
+    labels.show("agent-2", SideLabel(text: "Finished", style: .agent(color: nil), anchor: ends.0.offsetBy(dx: ends.1 - ends.0.minX, dy: 0)))
     for edit in [false, true] {
         if edit { Editing.shared.begin() }
         let bar = SideBarView(state: state, side: .bottom, place: place).environment(\.sideLabels, labels)

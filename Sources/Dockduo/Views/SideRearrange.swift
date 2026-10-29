@@ -9,10 +9,10 @@ func alongBar(_ r: CGRect, _ axis: BarAxis) -> CGRect {
     axis == .vertical || r.isNull ? r : CGRect(x: r.minY, y: r.minX, width: r.height, height: r.width)
 }
 
-// Dove cade un Dock trascinato nella barra di lato (coordinate dall'alto): la zona dal terzo di `barTop...barBottom`, la
-// posizione dopo l'ultimo altro Dock della zona con midY sopra il puntatore. Quelli senza frame non contano, come in
-// dropTarget. Una barra senza altezza (pannello non ancora piazzato) dà la zona in cima: il terzo di zero farebbe
-// Int(NaN).
+// Dove cade un Dock trascinato nella barra, lungo la barra dal suo inizio (alongBar): la zona dal terzo di
+// `barTop...barBottom`, la posizione dopo l'ultimo altro Dock della zona col centro prima del puntatore. Quelli senza frame
+// non contano, come in dropTarget. Una barra senza lunghezza (pannello non ancora piazzato) dà la prima zona: il terzo di
+// zero farebbe Int(NaN).
 func sideDropTarget<ID: Hashable>(at p: CGPoint, barTop: CGFloat, barBottom: CGFloat, dragging: ID,
                                   columns: [Zone: [ID]], frames: [ID: CGRect]) -> (zone: Zone, index: Int) {
     let third = barBottom > barTop ? Int(((p.y - barTop) / ((barBottom - barTop) / 3)).rounded(.down)) : 0
