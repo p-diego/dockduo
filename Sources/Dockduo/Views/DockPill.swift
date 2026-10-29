@@ -282,15 +282,10 @@ private func sectionMenu(in view: NSView, at point: NSPoint) -> NSView? {
 }
 
 // Una voce col suo sottomenu: una scelta per valore, col segno su quella di adesso.
-@MainActor private func choices<V: Equatable>(_ title: String, _ options: [(title: String, value: V)], current: V, enabled: Bool = true,
+@MainActor private func choices<V: Equatable>(_ title: String, _ options: [(title: String, value: V)], current: V,
                                               _ choose: @escaping (V) -> Void) -> NSMenuItem {
     let submenu = NSMenu()
-    submenu.autoenablesItems = false
-    for option in options {
-        let choice = ActionItem(option.title, on: option.value == current) { choose(option.value) }
-        choice.isEnabled = enabled
-        submenu.addItem(choice)
-    }
+    for option in options { submenu.addItem(ActionItem(option.title, on: option.value == current) { choose(option.value) }) }
     return submenuItem(title, submenu)
 }
 

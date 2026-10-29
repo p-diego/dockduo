@@ -21,6 +21,15 @@ func dockClickFollows(at p: CGPoint, screens: [CGRect], front: String?, frontLat
     return front
 }
 
+// AeroSpace sparito o tornato, guardato a ogni giro (spec app conclusa §2.3), anche senza gli eventi: sparito, la barra non ha
+// più spazio (.notOpen; "non installato" resta quello); tornato con uno di quei due motivi, lo spazio si rifà (Poller.tick). Gli
+// altri motivi sono del file: da aperto li cambia solo un sync.
+enum SpaceStep: Equatable { case stay, gone, back }
+func spaceStep(alive: Bool, problem: SpaceProblem?) -> SpaceStep {
+    let absent = problem == .notOpen || problem == .notInstalled
+    return alive ? (absent ? .back : .stay) : (absent ? .stay : .gone)
+}
+
 final class Poller {
     let state: BarState
     // Le chiamate ad AeroSpace (socket o CLI) girano qui; lo stato si scrive sul main.
@@ -46,6 +55,7 @@ final class Poller {
     private let settle: TimeInterval = 1.5
     private var badgeTimer: Timer?   // i numeri rossi del Dock (refreshBadges): vive solo col widget Dock acceso
     private var resolvingDock = false   // cartelle e mensola in corso di risoluzione (refreshDockItems)
+    private var resyncing = false   // il sync di AeroSpace tornato (spaceStep) è in corso: uno alla volta, non uno a giro
 
     init(state: BarState) { self.state = state }
 
@@ -176,8 +186,14 @@ final class Poller {
         let launched = dockOn ? Dictionary(apps.compactMap { a in a.launchDate.map { (a.processIdentifier, $0) } }, uniquingKeysWith: { a, _ in a }) : [:]
         // AeroSpace spento: non lo si interroga proprio — niente socket né CLI che falliscono a ogni giro, costavano 1,6% misurato il 3/10.
         let aerospaceAlive = aerospaceRunning()
-        // Sparito: niente più spazio per la barra, che si nasconde (barHides); al ritorno lo rifà connectEvents.
-        if !aerospaceAlive, state.spaceProblem != .notOpen, state.spaceProblem != .notInstalled { state.spaceProblem = .notOpen }
+        // Sparito, la barra si nasconde (barHides); tornato, lo spazio si rifà anche senza gli eventi (prima della 0.21).
+        switch spaceStep(alive: aerospaceAlive, problem: state.spaceProblem) {
+        case .gone: state.spaceProblem = .notOpen
+        case .back where !resyncing:
+            resyncing = true
+            MainActor.assumeIsolated { syncAerospaceGaps { [self] in state.spaceProblem = $0; resyncing = false } }
+        default: break
+        }
         // Con gli eventi la finestra a fuoco è già nota (.some(nil) = nessuna); senza, la si chiede ad AeroSpace.
         let focus: Int?? = eventsConnected ? .some(focusedWindowID) : nil
         let settle = settle

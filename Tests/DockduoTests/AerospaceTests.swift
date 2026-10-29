@@ -68,3 +68,14 @@ import Testing
     #expect(follows(700, 10, front: nil, later: nil) == nil)
     #expect(follows(700, 10, front: "com.dockduo", later: "com.dockduo") == nil)
 }
+
+// AeroSpace sparito o tornato, a ogni giro del Poller (spec app conclusa §2.3), anche senza gli eventi (prima della 0.21):
+// sparito → "non aperto" ("non installato" resta); tornato con uno di quei due motivi → un sync; gli altri motivi sono del
+// file e restano finché un sync non dice altro.
+@Test func aerospaceGoneAndBackMoveTheSpace() {
+    #expect(spaceStep(alive: false, problem: nil) == .gone)
+    for problem: SpaceProblem in [.noUserConfig, .unknownForm, .rejected] { #expect(spaceStep(alive: false, problem: problem) == .gone) }
+    #expect(spaceStep(alive: false, problem: .notOpen) == .stay && spaceStep(alive: false, problem: .notInstalled) == .stay)
+    #expect(spaceStep(alive: true, problem: .notOpen) == .back && spaceStep(alive: true, problem: .notInstalled) == .back)
+    for problem: SpaceProblem? in [nil, .noUserConfig, .unknownForm, .rejected] { #expect(spaceStep(alive: true, problem: problem) == .stay) }
+}
