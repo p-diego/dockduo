@@ -139,6 +139,7 @@ final class SidePanel: NSPanel {
     static var aerospaceConfig = ""
 
     let side: Side
+    private let state: BarState   // lo spazio per la barra (barHides)
     let labels = SideLabels()
     let place = SidePlace()
     let visibility = BarVisibility()
@@ -152,9 +153,9 @@ final class SidePanel: NSPanel {
         }
     }
 
-    // Nascondi automaticamente: `revealed` è la barra fuori (a interruttore spento, sempre). move(to:) fissa la cornice da
-    // visibile, il suo schermo e se quel bordo confina con un altro schermo; autohideTick la fa uscire e rientrare.
-    var revealed = !Settings.shared.autohide
+    // Nascondi automaticamente: `revealed` è la barra fuori (quando non si nasconde, barHides, sempre). move(to:) fissa la
+    // cornice da visibile, il suo schermo e se quel bordo confina con un altro schermo; autohideTick la fa uscire e rientrare.
+    var revealed: Bool
     private var shown = CGRect.zero, screenFrame = CGRect.zero, shared = false
     private var edgeSince: TimeInterval?
     private var alpha: (bar: CGFloat, text: CGFloat) = (0, 0)   // l'ultimo traguardo, anche a metà di una sfumatura
@@ -162,10 +163,10 @@ final class SidePanel: NSPanel {
     static let beat: TimeInterval = 0.1   // ogni quanto il battito del nascondi guarda il mouse (main.swift)
     static var adjustedAt: TimeInterval?   // l'ultimo cambio di larghezza, margine o lato col nascondi acceso (stillAdjusting)
     private var slideEnds: TimeInterval = 0   // quando finisce lo scorrimento in corso (slide)
-    private var hiding: Bool { Settings.shared.autohide && !revealed }
+    private var hiding: Bool { barHides(.shared, state) && !revealed }
 
     init(screen: NSScreen, side: Side, state: BarState) {
-        self.side = side
+        (self.side, self.state, revealed) = (side, state, !barHides(.shared, state))
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         for p in [self, labelPanel] {
             p.level = parkedMenuBar ? Self.aboveParkedMenuBar : Self.belowMenuBar
@@ -260,7 +261,7 @@ final class SidePanel: NSPanel {
     func hideIfCovered(windows list: @autoclosure () -> [[String: Any]] = onScreenWindows()) {
         dropStaleDockName(mouseSpot(NSEvent.mouseLocation, bar: shown, screen: screenFrame, side: side))
         guard active else { return }   // spenta: ferma
-        if Settings.shared.autohide { return show(true) }
+        if barHides(.shared, state) { return show(true) }
         guard let windows = windowsOnOurScreen(list()) else { return }   // nessuno schermo: ferma
         let screen = NSScreen.screens.first { $0.frame.intersects(frame) }?.frame ?? .zero
         let bar = CGRect(origin: CGPoint(x: frame.minX, y: 0), size: frame.size)   // dalla nostra cima, come le finestre

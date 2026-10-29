@@ -362,6 +362,17 @@ private func threeApps() -> [AppEntry] {
     #expect(!s.autohide && s.barSide == .left)
 }
 
+// Posizione sullo schermo anche senza AeroSpace (spec app conclusa §2.3): nulla nel cambio di lato ha bisogno di lui.
+@MainActor @Test func positionWorksWithoutAerospace() {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let s = Dockduo.Settings(defaults: d), state = BarState()
+    state.spaceProblem = .notInstalled
+    let sides = dockLineItems(settings: s, dock: nil, state: state).first { $0.title == "Position on Screen" }?.submenu?.items ?? []
+    #expect(sides.map(\.title) == ["Left", "Right"] && sides.allSatisfy(\.isEnabled))
+    _ = (sides.last?.target as? NSObject)?.perform(sides.last?.action, with: sides.last)
+    #expect(s.barSide == .right)
+}
+
 // L'aggiornamento in cima al menu della linea, staccato dalle altre voci (spec dock-degli-agenti §3: era in cima al menu
 // delle mascotte), com'è quando il menu si apre: da scaricare, in scaricamento (grigia), fallito (il DMG); senza niente da
 // offrire il menu comincia da Nascondi.

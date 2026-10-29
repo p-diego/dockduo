@@ -145,7 +145,8 @@ final class Poller {
         connecting = true
         DispatchQueue.global().async { [weak self] in
             subscribeAerospace(
-                onStart: { self?.connecting = false; self?.eventsConnected = true; MainActor.assumeIsolated { syncAerospaceGaps { _ in } } },
+                onStart: { self?.connecting = false; self?.eventsConnected = true
+                    MainActor.assumeIsolated { syncAerospaceGaps { self?.state.spaceProblem = $0 } } },
                 onEvent: { self?.handle($0) },
                 onEnd: { self?.connecting = false; self?.eventsConnected = false })
         }
@@ -175,6 +176,8 @@ final class Poller {
         let launched = dockOn ? Dictionary(apps.compactMap { a in a.launchDate.map { (a.processIdentifier, $0) } }, uniquingKeysWith: { a, _ in a }) : [:]
         // AeroSpace spento: non lo si interroga proprio — niente socket né CLI che falliscono a ogni giro, costavano 1,6% misurato il 3/10.
         let aerospaceAlive = aerospaceRunning()
+        // Sparito: niente più spazio per la barra, che si nasconde (barHides); al ritorno lo rifà connectEvents.
+        if !aerospaceAlive, state.spaceProblem != .notOpen, state.spaceProblem != .notInstalled { state.spaceProblem = .notOpen }
         // Con gli eventi la finestra a fuoco è già nota (.some(nil) = nessuna); senza, la si chiede ad AeroSpace.
         let focus: Int?? = eventsConnected ? .some(focusedWindowID) : nil
         let settle = settle

@@ -249,19 +249,36 @@ private func sectionMenu(in view: NSView, at point: NSPoint) -> NSView? {
 }
 
 // Le voci della linea del Dock di macOS che dockduo ha (autore, 25/10): Nascondi, la posizione sullo schermo senza In basso
-// (la barra sta solo di lato; senza AeroSpace bloccata) e Riduci usando del Dock di macOS (useMinimizeEffect). Niente
-// Ingrandimento: dockduo non ce l'ha. Le stesse nel menu della linea e in cima a Impostazioni ›, che si apre da ogni punto
-// della barra (autore, 28/10: «DEVE essere uguale»): la linea non c'è con una sezione sola. Dicono lo stato di quando il
-// menu si apre.
-@MainActor func dockLineItems(settings: Settings, dock: UserDefaults?) -> [NSMenuItem] {
+// (la barra sta solo di lato; anche senza AeroSpace, spec app conclusa §2.3) e Riduci usando del Dock di macOS
+// (useMinimizeEffect). Niente Ingrandimento: dockduo non ce l'ha. Le stesse nel menu della linea e in cima a Impostazioni ›,
+// che si apre da ogni punto della barra (autore, 28/10: «DEVE essere uguale»): la linea non c'è con una sezione sola. Dicono
+// lo stato di quando il menu si apre.
+@MainActor func dockLineItems(settings: Settings, dock: UserDefaults?, state: BarState = .shared) -> [NSMenuItem] {
     let effect = dock.map(minimizeEffect) ?? "genie"
-    return [
-        ActionItem(String(localized: settings.autohide ? "Turn Hiding Off" : "Turn Hiding On")) { settings.autohide.toggle() },
+    return hidingItems(settings, state) + [
         choices(String(localized: "Position on Screen"), [(String(localized: "Left"), Side.left), (String(localized: "Right"), .right)],
-                current: settings.barSide, enabled: aerospaceRunning()) { settings.barSide = $0 },
+                current: settings.barSide) { settings.barSide = $0 },
         choices(String(localized: "Minimize Using"), [(String(localized: "Genie Effect"), "genie"), (String(localized: "Scale Effect"), "scale")],
                 current: effect) { if $0 != effect { useMinimizeEffect($0) } },
     ]
+}
+
+// Nascondi: l'interruttore dell'utente; senza spazio per la barra (barHides) al suo posto una riga grigia con la spunta e il
+// motivo in breve, e l'interruttore resta com'era. Senza un file dell'utente anche la voce che lo crea.
+@MainActor private func hidingItems(_ settings: Settings, _ state: BarState) -> [NSMenuItem] {
+    guard let problem = state.spaceProblem else {
+        return [ActionItem(String(localized: settings.autohide ? "Turn Hiding Off" : "Turn Hiding On")) { settings.autohide.toggle() }]
+    }
+    let reason = switch problem {
+    case .notInstalled: String(localized: "AeroSpace isn't installed")
+    case .notOpen: String(localized: "AeroSpace isn't open")
+    case .noUserConfig: String(localized: "AeroSpace has no config file of its own")
+    case .unknownForm: String(localized: "AeroSpace's gaps are in a form dockduo can't edit")
+    case .rejected: String(localized: "AeroSpace rejected the gaps")
+    }
+    let lines = [greyLine(String(localized: "Hidden: no space reserved"), on: true), greyLine(reason)]
+    guard problem == .noUserConfig else { return lines }
+    return lines + [ActionItem(String(localized: "Create AeroSpace Config")) { createAerospaceConfigAndSync() }]
 }
 
 // Una voce col suo sottomenu: una scelta per valore, col segno su quella di adesso.

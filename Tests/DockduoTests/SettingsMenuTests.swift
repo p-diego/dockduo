@@ -44,6 +44,35 @@ private struct Broken: LocalizedError { var errorDescription: String? { "broken"
     #expect(s.autohide)
 }
 
+// Review Focus 2 (spec app conclusa §2.3): AeroSpace si chiude mentre dockduo gira e la barra si nasconde da sola, con Nascondi
+// grigio, la spunta e il motivo in breve; la scelta dell'utente non si tocca e, tornato lo spazio, torna l'interruttore. "Crea
+// il file di AeroSpace" solo senza un file dell'utente.
+@MainActor @Test func spaceComesAndGoesWithAerospace() {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let s = Dockduo.Settings(defaults: d), state = BarState()
+    func items() -> [NSMenuItem] { dockLineItems(settings: s, dock: nil, state: state) }
+    state.spaceProblem = .notOpen
+    #expect(barHides(s, state) && !s.autohide)
+    let hidden = Array(items().prefix(2))
+    #expect(hidden.map(\.title) == ["Hidden: no space reserved", "AeroSpace isn't open"])
+    #expect(hidden.map(\.isEnabled) == [false, false] && hidden.map(\.state) == [.on, .off])
+    #expect(!s.autohide)
+    state.spaceProblem = nil
+    #expect(!barHides(s, state) && items()[0].title == "Turn Hiding On")
+    let reasons: [(SpaceProblem, String)] = [
+        (.notInstalled, "AeroSpace isn't installed"), (.notOpen, "AeroSpace isn't open"),
+        (.noUserConfig, "AeroSpace has no config file of its own"),
+        (.unknownForm, "AeroSpace's gaps are in a form dockduo can't edit"), (.rejected, "AeroSpace rejected the gaps"),
+    ]
+    for (problem, reason) in reasons {
+        state.spaceProblem = problem
+        let titles = items().map(\.title)
+        #expect(titles[1] == reason)
+        #expect(titles.contains("Create AeroSpace Config") == (problem == .noUserConfig))
+        #expect(!titles.contains { $0.hasPrefix("Turn Hiding") })
+    }
+}
+
 // Per ogni agente il nome, lo stato del collegamento con la sua azione, l'errore dell'ultima azione e l'account; in fondo
 // ogni quanto si aggiornano i limiti.
 @MainActor @Test func theAgentsMenuFollowsTheHooks() async throws {

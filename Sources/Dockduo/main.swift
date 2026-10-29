@@ -13,7 +13,7 @@ if inApplications(Bundle.main.bundlePath), UserDefaults.standard.object(forKey: 
     try? SMAppService.mainApp.register()
 }
 
-let state = BarState()
+let state = BarState.shared
 allowCursorInBackground()   // il cursore a frecce sopra la linea del Dock (DockLineMenuView)
 DockDrop.shared.watchDrags()   // il velo della barra durante i trascinamenti (DockDrop.dragAround)
 let poller = Poller(state: state)
@@ -47,13 +47,14 @@ func applyBarSide() {
     for (i, pair) in sidePanels.enumerated() { pair.values.forEach { $0.active = i < live && $0.side == side } }
 }
 
-// Nascondi automaticamente (spec cartelle §4): a interruttore acceso un battito leggero ogni 0,1 s guarda dov'è il mouse
-// (SidePanel.beat, autohideTick); niente monitor degli eventi, che in Siigil rendevano a scatti i menu. Misurato il 25/10 con un
-// programma di prova: 0,13% di CPU (una lettura del mouse costa 7 µs, quella dei tasti 3 µs). Spento, il battito non c'è e le barre sono fuori.
+// Nascondi automaticamente (spec cartelle §4): a interruttore acceso, o senza spazio per la barra (barHides), un battito
+// leggero ogni 0,1 s guarda dov'è il mouse (SidePanel.beat, autohideTick); niente monitor degli eventi, che in Siigil rendevano
+// a scatti i menu. Misurato il 25/10 con un programma di prova: 0,13% di CPU (una lettura del mouse costa 7 µs, quella dei
+// tasti 3 µs). Spento, il battito non c'è e le barre sono fuori.
 // I tempi del Dock si rileggono a ogni showPanels. Modo .common: batte anche mentre si trascina un file verso il bordo.
 var autohideTimer: Timer?
 func updateAutohide() {
-    guard Settings.shared.autohide else {
+    guard MainActor.assumeIsolated({ barHides(.shared, state) }) else {
         autohideTimer?.invalidate(); autohideTimer = nil
         // Le nascoste rientrano scorrendo (autore, 25/10); riaccendendo l'interruttore scorrono via, animate. Il controllo
         // del tutto schermo di showPanels le vede a metà strada: si rifà a scorrimento finito.
@@ -120,19 +121,20 @@ NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.activeSpa
 // Cambiare lato, larghezza o il nascondi automatico: le barre si spostano e si accendono o si spengono subito;
 // AeroSpace segue mezzo secondo dopo l'ultimo cambio (i margini delle sue finestre ai lati si riscrivono). Il nascondi
 // riscrive lo spazio solo qui, all'interruttore, mai a ogni comparsa della barra. Col nascondi acceso, cambiare lato
-// o larghezza fa uscire la barra per vederla (adjustGrace); dopo che si è rimessa a posto, così scorre già lì.
+// o larghezza fa uscire la barra per vederla (adjustGrace); dopo che si è rimessa a posto, così scorre già lì. Lo spazio
+// che manca o torna (barHides) la fa scorrere come l'interruttore; lo spazio chiesto ad AeroSpace segue solo l'interruttore.
 var gapsSync: DispatchWorkItem?
 func barShape() -> [AnyHashable] { let s = Settings.shared; return [s.barSide, s.sideWidth] }
 var lastBarShape = barShape()
-whenChanged({ barShape() + [Settings.shared.autohide] }) {
+whenChanged({ barShape() + [Settings.shared.autohide, MainActor.assumeIsolated { barHides(.shared, state) }] }) {
     let adjusted = barShape() != lastBarShape
     lastBarShape = barShape()
     showPanels()
-    if adjusted, Settings.shared.autohide {
+    if adjusted, MainActor.assumeIsolated({ barHides(.shared, state) }) {
         SidePanel.adjustedAt = ProcessInfo.processInfo.systemUptime
         sidePanels.flatMap(\.values).filter(\.active).forEach { $0.reveal() }
     }
-    debounce(&gapsSync, after: 0.5) { MainActor.assumeIsolated { syncAerospaceGaps { _ in } } }
+    debounce(&gapsSync, after: 0.5) { MainActor.assumeIsolated { syncAerospaceGaps { state.spaceProblem = $0 } } }
 }
 // La prima lettura parte subito, con la richiesta del suo permesso: Automazione per In riproduzione. Lo Stato anche appena
 // spento: il Poller legge batteria e Wi‑Fi solo con lo Stato acceso, quindi si svuotano.
@@ -161,7 +163,7 @@ NotificationCenter.default.addObserver(
 MainActor.assumeIsolated { NowPlaying.start() }   // "In riproduzione": gli annunci di Spotify e Music (NowPlaying.swift)
 poller.start()
 readTopGap()   // prima in coda sulla coda dei gap: la barra nasce già al posto giusto
-MainActor.assumeIsolated { syncAerospaceGaps { _ in } }   // a ogni avvio: dopo un'uscita forzata riallinea i lati senza risalvare
+MainActor.assumeIsolated { syncAerospaceGaps { state.spaceProblem = $0 } }   // a ogni avvio: dopo un'uscita forzata riallinea i lati senza risalvare
 // Benvenuto (spec 2026-09-25): al primo avvio della copia installata, e dopo un aggiornamento se un permesso è sparito
 // (dal disco immagine o da una copia tradotta si apre subito, non da qui: showSetupIfNeeded). Da un Timer, come
 // l'avviso di prima: tiene i 2 s di attesa a barra già visibile e gira fuori da un blocco GCD.

@@ -16,6 +16,7 @@ struct WiFi: Equatable {
 
 @Observable
 final class BarState {
+    static let shared = BarState()   // quella dell'app (main.swift); le prove se ne fanno una loro
     var reports: [SpaceReport] = []
     var hidden: [AppEntry] = []      // app senza finestre visibili
     var dock: [AppEntry] = []        // il widget Dock: le app del Dock in ordine di apertura (dockApps); vuoto da spento
@@ -27,4 +28,9 @@ final class BarState {
     var trackRead = false    // la prima lettura di In riproduzione è tornata (riuscita o no): prima la barra non sa se la capsula vuota va
     var artwork: NSImage?    // la copertina della traccia, quando arriva
     var sessions: [String: AgentSession] = [:]   // sessioni di agenti AI per session_id (AgentServer)
+    var spaceProblem: SpaceProblem?   // perché AeroSpace non fa posto alla barra (syncAerospaceGaps, Poller); nil = posto fatto
 }
+
+// La barra si nasconde (spec app conclusa §2.3): con Nascondi acceso, o da sola quando AeroSpace non le fa posto. L'unica
+// regola per chi nasconde; Settings.autohide resta la scelta dell'utente, che lo spazio ritrovato rimette com'era.
+@MainActor func barHides(_ s: Settings, _ state: BarState) -> Bool { s.autohide || state.spaceProblem != nil }

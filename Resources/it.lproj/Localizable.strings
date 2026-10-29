@@ -111,6 +111,13 @@
 "Remove from Shelf" = "Togli dalla mensola";
 "Turn Hiding On" = "Attiva Nascondi";
 "Turn Hiding Off" = "Disattiva Nascondi";
+"Hidden: no space reserved" = "Nascosta: nessuno spazio riservato";
+"AeroSpace isn't installed" = "AeroSpace non è installato";
+"AeroSpace isn't open" = "AeroSpace non è aperto";
+"AeroSpace has no config file of its own" = "AeroSpace non ha un file suo";
+"AeroSpace's gaps are in a form dockduo can't edit" = "margini di AeroSpace in una forma che dockduo non sa modificare";
+"AeroSpace rejected the gaps" = "AeroSpace ha rifiutato i margini";
+"Create AeroSpace Config" = "Crea il file di AeroSpace";
 "Position on Screen" = "Posizione sullo schermo";
 "Left" = "A sinistra";
 "Right" = "A destra";

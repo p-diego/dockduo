@@ -50,6 +50,36 @@ func installAerospaceInTerminal() {
     openTerminal(script: "printf '\\nInstalling AeroSpace with Homebrew.\\n\\n'\n'\(brew)' install --cask nikitabobko/tap/aerospace\nprintf '\\nDone. Open AeroSpace from Applications, then come back to dockduo.\\n'\n", name: "aerospace")
 }
 
+// "Crea il file di AeroSpace" (spec app conclusa §2.3): senza un file dell'utente AeroSpace usa quello di fabbrica dentro
+// l'app, che non si scrive; la sua copia in ~/.aerospace.toml, come dice la guida di AeroSpace, si comporta uguale e lì
+// dockduo può fare posto. Mai sopra un file che c'è, nemmeno accanto a ~/.config/aerospace/aerospace.toml: con due file
+// AeroSpace non sa quale leggere.
+func createAerospaceConfig(app: URL, home: URL) throws {
+    guard !FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/aerospace/aerospace.toml").path) else {
+        throw CocoaError(.fileWriteFileExists)
+    }
+    try FileManager.default.copyItem(at: app.appendingPathComponent("Contents/Resources/default-config.toml"),
+                                     to: home.appendingPathComponent(".aerospace.toml"))   // se c'è già: errore, non sovrascrive
+}
+
+// Il Benvenuto lo offre solo con AeroSpace aperto e senza un file suo; chiuso o assente, la riga offre di aprirlo o installarlo.
+func offersAerospaceConfig(_ aerospace: SetupModel.AerospaceState, _ problem: SpaceProblem?) -> Bool {
+    aerospace == .running && problem == .noUserConfig
+}
+
+// Dal Benvenuto e da Impostazioni ›: fuori dal main la copia, poi AeroSpace rilegge (cerca di nuovo il file dell'utente:
+// finora usava quello di fabbrica) e lo spazio per la barra si rifà, così il motivo sparisce.
+@MainActor func createAerospaceConfigAndSync() {
+    DispatchQueue.global().async {
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: aerospaceBundle) {
+            do { try createAerospaceConfig(app: app, home: FileManager.default.homeDirectoryForCurrentUser) }
+            catch { logger.error("file di AeroSpace non creato: \(error.localizedDescription)") }
+            _ = shell(aerospacePath, ["reload-config", "--no-gui"])
+        }
+        DispatchQueue.main.async { syncAerospaceGaps { BarState.shared.spaceProblem = $0 } }
+    }
+}
+
 // MARK: Spostamento in Applicazioni
 
 // Questa copia gira dal DMG o da Scaricati: la copia in una cartella Applications, le toglie la quarantena (l'utente ha

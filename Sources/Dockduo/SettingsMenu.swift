@@ -169,7 +169,7 @@ final class ActionItem: NSMenuItem {
 }
 
 // Una riga grigia di solo testo: una voce spenta, come le righe d'informazione dei menu di sistema.
-private func greyLine(_ title: String, on: Bool = false) -> NSMenuItem {
+func greyLine(_ title: String, on: Bool = false) -> NSMenuItem {
     let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
     item.isEnabled = false
     item.state = on ? .on : .off

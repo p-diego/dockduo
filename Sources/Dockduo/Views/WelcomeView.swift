@@ -9,6 +9,7 @@ struct WelcomeView: View {
     let model: SetupModel
     let close: () -> Void
     private let settings = Settings.shared
+    private let state = BarState.shared   // il motivo per cui AeroSpace non fa posto: la riga si aggiorna da sola
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,11 +28,15 @@ struct WelcomeView: View {
                                 Button("Move to Applications") { move() }
                             }
                         }
-                        // Consiglio, non requisito (spec senza-aerospace §4): senza, la barra mostra le app aperte.
+                        // Consiglio, non requisito (spec senza-aerospace §4): senza, la barra mostra le app aperte. Aperto
+                        // ma senza un file suo, il file da creare (spec app conclusa §2.3).
+                        let createConfig = offersAerospaceConfig(model.aerospace, state.spaceProblem)
                         row("rectangle.3.group", "AeroSpace window manager",
                             description: "With AeroSpace the bar shows your workspaces; without it, the open apps.",
-                            done: model.aerospace == .running) {
-                            if model.aerospace == .installedNotRunning {
+                            done: model.aerospace == .running && !createConfig) {
+                            if createConfig {
+                                Button("Create AeroSpace Config") { createAerospaceConfigAndSync() }
+                            } else if model.aerospace == .installedNotRunning {
                                 // AeroSpace ci mette un momento ad apparire tra le app in esecuzione: un refresh
                                 // immediato lo trova ancora spento e la riga non diventa verde da sola.
                                 Button("Open AeroSpace") {
