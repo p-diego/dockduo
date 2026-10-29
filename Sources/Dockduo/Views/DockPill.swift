@@ -586,9 +586,11 @@ struct DockNameLabel: View {
 // Dal lato interno della barra al nome di una voce del Dock: 6 dal vetro del Dock, come in macOS (pixel 104-115 della
 // cattura, fra i due vetri). `anchor` è la capsula all'altezza della voce, nello spazio "bar"; il pannello dei testi comincia
 // al lato interno della barra, quindi il vuoto è 6 meno quanto la capsula sta dentro la barra (a barra 52: 4, quindi 2).
-// Mai dentro la barra: col Dock rimpicciolito la capsula sta più dentro e il nome si appoggia al bordo.
-func dockNameGap(anchor: CGRect, barWidth: CGFloat, opensLeft: Bool) -> CGFloat {
-    max(0, 6 - (opensLeft ? anchor.minX : barWidth - anchor.maxX))
+// Il lato interno: a sinistra il destro (`barWidth`), a destra il sinistro, in basso la cima. Mai dentro la barra: col Dock
+// rimpicciolito la capsula sta più dentro e il nome si appoggia al bordo.
+func dockNameGap(anchor: CGRect, barWidth: CGFloat, side: Side) -> CGFloat {
+    let inside = switch side { case .left: barWidth - anchor.maxX; case .right: anchor.minX; case .bottom: anchor.minY }
+    return max(0, 6 - inside)
 }
 
 // La mensola vuota mentre trascini sul Dock (spec dock §3): una casella tratteggiata grande quanto il disegno di un'icona

@@ -204,7 +204,7 @@ final class SidePanel: NSPanel {
             .environment(\.barVisibility, visibility))
         bar.sizingOptions = []   // la misura è quella del pannello, anche con una zona che non ci sta
         contentView = bar
-        labelPanel.contentView = NSHostingView(rootView: SideLabelsView(labels: labels, opensLeft: side == .right).modifier(SideLook()))
+        labelPanel.contentView = NSHostingView(rootView: SideLabelsView(labels: labels, side: side).modifier(SideLook()))
         addChildWindow(labelPanel, ordered: .above)   // compare, sparisce e si sposta con la barra
         // Uscendo dal bordo o col Mac sbloccato macOS la vede dopo: è da lì che si vede (noteVisibility).
         NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: self, queue: .main) { [weak self] _ in

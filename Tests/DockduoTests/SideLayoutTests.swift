@@ -89,6 +89,40 @@ private let apps = BarItem.widget(.apps), nowPlaying = BarItem.widget(.nowPlayin
     #expect(s.docks.map(\.id) == [b.id, a.id])
 }
 
+// Lungo la barra (alongBar): di lato la y, così com'è; in basso la x, con x e y scambiati. Una cornice che non c'è resta
+// tale.
+@Test func alongTheBottomBarIsTheWidth() {
+    let r = CGRect(x: 1, y: 2, width: 3, height: 4), p = CGPoint(x: 1, y: 2)
+    #expect(alongBar(r, .vertical) == r && alongBar(p, .vertical) == p)
+    #expect(alongBar(r, .horizontal) == CGRect(x: 2, y: 1, width: 4, height: 3) && alongBar(p, .horizontal) == CGPoint(x: 2, y: 1))
+    #expect(alongBar(CGRect.null, .horizontal).isNull)
+}
+
+// Il ⌘-trascina in basso: la prova di theReleaseSavesThePreview girata (cornici e puntatore lungo la larghezza, la barra da
+// sinistra a destra, la cima a sinistra), con gli stessi risultati.
+@Test func theBottomReleaseFollowsTheWidth() {
+    let (a, b, c) = (UUID(), UUID(), UUID()), h = BarAxis.horizontal
+    let columns: [Zone: [UUID]] = [.top: [a, b, c], .middle: [], .bottom: []]
+    let frames = [a: CGRect(x: 50, y: 0, width: 40, height: 36), b: CGRect(x: 100, y: 0, width: 40, height: 36),
+                  c: CGRect(x: 150, y: 0, width: 40, height: 36)]
+    let bar = alongBar(CGRect(x: 40, y: 930, width: 1060, height: 52), h)
+    func target(_ id: UUID, _ x: CGFloat) -> (zone: Zone, index: Int) {
+        sideDropTarget(at: alongBar(CGPoint(x: x, y: 20), h), barTop: bar.minY, barBottom: bar.maxY, dragging: id, columns: columns,
+                       frames: frames.mapValues { alongBar($0, h) })
+    }
+    #expect(target(a, 125) == (Zone.top, 1))
+    #expect(target(c, 95) == (Zone.top, 1) && target(a, 1050) == (Zone.bottom, 0))
+}
+
+// Il Dock preso col ⌘ in basso resta sotto il puntatore lungo la larghezza (inBar), alla sua altezza: preso 5 dopo il suo
+// inizio, col puntatore a 100 comincia a 95.
+@MainActor @Test func theDraggedDockFollowsThePointerAlongTheBottom() throws {
+    let view = Color.red.frame(width: 10, height: 10).inBar(grab: 5, pointer: 100, axis: .horizontal)
+        .frame(width: 200, height: 20, alignment: .topLeading).coordinateSpace(name: "bar")
+    let ink = try inkBounds(view, size: CGSize(width: 200, height: 20))
+    #expect(abs(ink.minX - 95) < 0.5 && abs(ink.minY) < 0.5 && abs(ink.width - 10) < 0.5, "\(ink)")
+}
+
 @Observable private final class Knob { var value = 0 }
 
 // withObservationTracking avvisa una volta sola: whenChanged si riarma, e agisce solo se il valore cambia davvero.

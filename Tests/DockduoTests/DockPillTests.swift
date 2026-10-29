@@ -142,7 +142,7 @@ private func threeApps() -> [AppEntry] {
     func zone(_ docks: [[WidgetID]]) -> CGFloat {
         let boxes = docks.map { DockBox(zone: .middle, sections: $0.map(BarItem.widget)) }
         return NSHostingView(rootView: VStack(spacing: 6 * scale) {
-            ForEach(boxes) { DockBoxView(box: $0, state: state, side: .left, icons: icons, settings: s).inBar(grab: nil, pointer: 0) }
+            ForEach(boxes) { DockBoxView(box: $0, state: state, side: .left, icons: icons, settings: s).inBar(grab: nil, pointer: 0, axis: .vertical) }
         }.environment(\.barScale, scale)).fittingSize.height
     }
     let one = zone([[.nowPlaying]])
@@ -318,14 +318,17 @@ private func threeApps() -> [AppEntry] {
 
 // Il nome al passaggio del mouse a 6 dal vetro del Dock, come in macOS: a barra 52 la capsula (45, mezzo punto verso il
 // bordo: da 3 a 48) sta 4 dentro il lato interno della barra, quindi il nome 2 fuori; a destra lo stesso a specchio (da 4
-// a 49). Col Dock rimpicciolito la capsula sta più dentro (qui larga 26 × 52/38, al centro): il nome non entra nella barra.
+// a 49); in basso lo stesso, girato: il lato interno è la cima della barra (da 4 a 49 in altezza). Col Dock rimpicciolito
+// la capsula sta più dentro (qui larga 26 × 52/38, al centro): il nome non entra nella barra.
 @Test func theDockNameSitsSixFromTheDockGlass() {
     let left = CGRect(x: 3, y: 100, width: 45, height: 31), right = left.offsetBy(dx: 1, dy: 0)
-    #expect(abs(dockNameGap(anchor: left, barWidth: 52, opensLeft: false) - 2) < 0.001)
-    #expect(abs(dockNameGap(anchor: right, barWidth: 52, opensLeft: true) - 2) < 0.001)
+    #expect(abs(dockNameGap(anchor: left, barWidth: 52, side: .left) - 2) < 0.001)
+    #expect(abs(dockNameGap(anchor: right, barWidth: 52, side: .right) - 2) < 0.001)
+    #expect(abs(dockNameGap(anchor: alongBar(right, .horizontal), barWidth: 52, side: .bottom) - 2) < 0.001)
     let narrow: CGFloat = 26 * 52 / 38, shrunk = CGRect(x: (52 - narrow) / 2, y: 100, width: narrow, height: 31)
-    #expect(dockNameGap(anchor: shrunk, barWidth: 52, opensLeft: false) == 0)
-    #expect(dockNameGap(anchor: shrunk, barWidth: 52, opensLeft: true) == 0)
+    #expect(dockNameGap(anchor: shrunk, barWidth: 52, side: .left) == 0)
+    #expect(dockNameGap(anchor: shrunk, barWidth: 52, side: .right) == 0)
+    #expect(dockNameGap(anchor: alongBar(shrunk, .horizontal), barWidth: 52, side: .bottom) == 0)
 }
 
 // Trascinare la linea del Dock lo ridimensiona come in macOS: il bordo interno della capsula segue il puntatore. A barra 52
@@ -497,7 +500,7 @@ private func threeApps() -> [AppEntry] {
         RoundedRectangle(cornerRadius: 15.5).fill(Color(red: 13 / 255, green: 14 / 255, blue: 20 / 255))
             .frame(width: capsule.width, height: capsule.height).padding(.leading, capsule.minX).frame(width: 52, alignment: .leading)
         DockNameLabel(text: "App Store").background(Capsule().fill(.white.opacity(0.128)))
-            .padding(.leading, dockNameGap(anchor: capsule, barWidth: 52, opensLeft: false))
+            .padding(.leading, dockNameGap(anchor: capsule, barWidth: 52, side: .left))
     }
     .padding(.leading, 2).padding(.vertical, 20).frame(width: 420, alignment: .leading)
     .background(Color(red: 1 / 255, green: 2 / 255, blue: 8 / 255)).environment(\.colorScheme, .dark)

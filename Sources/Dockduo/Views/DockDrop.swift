@@ -108,7 +108,8 @@ extension Settings {
 // Dock che non la prende, anche sull'altro schermo) resta al suo posto. Annullata con Esc resta (DockDrop.ended).
 func folderDragRemoves(_ operation: NSDragOperation, at point: CGPoint, bars: [CGRect]) -> Bool {
     operation.isEmpty && !bars.contains { bar in
-        let margin = bar.width * 33 / 52   // un passo del Dock (31 + 2) alla larghezza della barra
+        // Un passo del Dock (31 + 2) allo spessore della barra: il suo lato corto, di lato la larghezza, in basso l'altezza.
+        let margin = min(bar.width, bar.height) * 33 / 52
         return bar.insetBy(dx: -margin, dy: -margin).contains(point)
     }
 }

@@ -15,7 +15,7 @@ struct SideBarView: View {
     @State private var frames: [UUID: CGRect] = [:]   // i miei Dock nello spazio "bar" (⌘-trascina, rilasci)
     @State private var resting: [UUID: CGRect] = [:]   // Dock e loro voci senza un trascinamento sopra (rest)
     @State private var sectionFrames: [BarItem: CGRect] = [:]   // le sezioni, a riposo come `resting`
-    @State private var held: (start: CGPoint, grab: CGFloat)?   // il ⌘-trascina partito qui: dove, e quanto sotto la cima del Dock
+    @State private var held: (start: CGPoint, grab: CGFloat)?   // il ⌘-trascina partito qui: dove, e quanto dopo l'inizio del Dock lungo la barra
     @GestureState private var pressing = false   // il ⌘-trascina di questa barra è in corso (si azzera anche senza onEnded)
     @State private var icons = IconDragging()   // il trascina icone fra le pillole spazio (IconDrag.swift)
 
@@ -98,12 +98,14 @@ struct SideBarView: View {
     // Un Dock: registra dove sta (solo se si vede) e dove le sue voci, e, se è quello trascinato, il suo scostamento
     // (inBar); se ha sopra un trascinamento, glielo dà. `scale`: quella della zona (già ristretta), per il posto che si apre.
     private func dock(_ box: DockBox, _ scale: CGFloat) -> some View {
-        // Il trascina icone in colonna: le pillole spazio sono righe, lo spessore è la larghezza della barra.
-        DockBoxView(box: box, state: state, side: side, icons: icons.hooks(state, thickness: settings.sideWidth),
+        // Il trascina icone lungo la barra: le pillole spazio sono tratti di lei, lo spessore è quello della barra (in basso
+        // l'altezza, che è la stessa misura).
+        DockBoxView(box: box, state: state, side: side, icons: icons.hooks(state, thickness: settings.sideWidth, axis: side.axis),
                     onFrame: { frames[box.id] = $0; rest(box.id, $0) },
                     onTile: rest, onSection: { item, frame in if !frozen { sectionFrames[item] = frame } },
                     display: place.display, hover: hover?.dock == box.id ? hover : nil, room: room(in: box, scale))
-            .inBar(grab: current?.id == box.id ? grab : nil, pointer: (current?.point.y ?? 0) - place.bar.minY)
+            .inBar(grab: current?.id == box.id ? grab : nil,
+                   pointer: alongBar(current?.point ?? .zero, side.axis).y - alongBar(place.bar, side.axis).minY, axis: side.axis)
     }
 
     // Il trascinamento sopra un Dock di questa barra, se c'è (DockDrop.hover è uno per tutte le barre).
@@ -129,23 +131,28 @@ struct SideBarView: View {
     }
 
     // Dove cadrebbe la sezione in mano (sectionTarget), sulle cornici a riposo dei Dock e delle loro sezioni; le zone sono i
-    // terzi della barra, come per il ⌘-trascina (sideDropTarget).
+    // terzi della barra, come per il ⌘-trascina (sideDropTarget). Tutto girato lungo la barra (alongBar).
     private func sectionDropTarget(_ p: CGPoint, _ docks: [DockBox]) -> SectionTarget? {
-        let third = place.bar.height / 3
+        let axis = side.axis, bar = alongBar(CGRect(origin: .zero, size: place.bar.size), axis)
+        let third = bar.height / 3
         let zones = Dictionary(uniqueKeysWithValues: Zone.allCases.enumerated().map {
-            ($1, CGRect(x: 0, y: CGFloat($0) * third, width: place.bar.width, height: third))
+            ($1, CGRect(x: 0, y: CGFloat($0) * third, width: bar.width, height: third))
         })
-        return sectionTarget(at: p.y, docks: docks.map { box in (box, resting[box.id] ?? .null, box.sections.map { sectionFrames[$0] ?? .null }) },
+        return sectionTarget(at: alongBar(p, axis).y,
+                             docks: docks.map { box in (box, alongBar(resting[box.id] ?? .null, axis),
+                                                        box.sections.map { alongBar(sectionFrames[$0] ?? .null, axis) }) },
                              zones: zones)
     }
 
     // Il Dock sotto un trascinamento e dove ci cadrebbe un rilascio (DockDropDelegate): fra quelli che lo prendono
-    // (dockTakes), sulle cornici a riposo (hoveredDock, dropSpot).
+    // (dockTakes), sulle cornici a riposo (hoveredDock, dropSpot), girate lungo la barra (alongBar).
     private func dropTarget(_ p: CGPoint, _ docks: [DockBox]) -> (box: DockBox, spot: DockSpot)? {
-        let drop = DockDrop.shared, taking = docks.filter { dockTakes($0, from: drop.source) }
-        guard let id = hoveredDock(at: p, docks: taking.map(\.id), resting: resting, current: frames, hovered: hover?.dock),
+        let drop = DockDrop.shared, taking = docks.filter { dockTakes($0, from: drop.source) }, axis = side.axis
+        let q = alongBar(p, axis), rest = resting.mapValues { alongBar($0, axis) }
+        guard let id = hoveredDock(at: q, docks: taking.map(\.id), resting: rest, current: frames.mapValues { alongBar($0, axis) },
+                                   hovered: hover?.dock),
               let box = taking.first(where: { $0.id == id }) else { return nil }
-        return (box, settings.dropSpot(in: box, y: p.y, resting: resting, moving: drop.moving))
+        return (box, settings.dropSpot(in: box, y: q.y, resting: rest, moving: drop.moving))
     }
 
     // Un Dock che si può prendere col ⌘: c'è ancora e una sua sezione si vede (barItemShows). Quello che DockBoxView mostra
@@ -157,7 +164,7 @@ struct SideBarView: View {
     // Il ⌘-trascina di questo schermo, se c'è.
     private var current: SideDrag.Current? { drag.current.flatMap { $0.display == place.display ? $0 : nil } }
 
-    // Quanto sotto la cima hai preso il Dock, se quel ⌘-trascina è il suo (lo stesso punto di presa: un `held` rimasto da un
+    // Quanto dopo il suo inizio hai preso il Dock, se quel ⌘-trascina è il suo (lo stesso punto di presa: un `held` rimasto da un
     // gesto interrotto non sposta un trascinamento nuovo).
     private var grab: CGFloat? { held.flatMap { h in current?.start == onScreen(h.start) ? h.grab : nil } }
 
@@ -165,11 +172,12 @@ struct SideBarView: View {
     private func onScreen(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + place.bar.minX, y: p.y + place.bar.minY) }
 
     // Dove cadrebbe il Dock che trascini (sideDropTarget fra i Dock di ogni zona), sulle cornici di quando hai cominciato;
-    // chi nel frattempo è sparito non conta.
+    // chi nel frattempo è sparito non conta. Girato lungo la barra (alongBar): in basso i terzi da sinistra a destra.
     private func target(_ c: SideDrag.Current) -> (zone: Zone, index: Int) {
-        sideDropTarget(at: c.point, barTop: place.bar.minY, barBottom: place.bar.maxY, dragging: c.id,
-                       columns: Dictionary(uniqueKeysWithValues: Zone.allCases.map { ($0, settings.docks(in: $0).map(\.id)) }),
-                       frames: c.frames.filter { shows($0.key) })
+        let axis = side.axis, bar = alongBar(place.bar, axis)
+        return sideDropTarget(at: alongBar(c.point, axis), barTop: bar.minY, barBottom: bar.maxY, dragging: c.id,
+                              columns: Dictionary(uniqueKeysWithValues: Zone.allCases.map { ($0, settings.docks(in: $0).map(\.id)) }),
+                              frames: c.frames.filter { shows($0.key) }.mapValues { alongBar($0, axis) })
     }
 
     // I Dock come si vedono: quelli salvati o, mentre trascini, come saranno al rilascio.
@@ -181,7 +189,7 @@ struct SideBarView: View {
 
     // ⌘-trascina: un gesto per la barra, che all'inizio prende il Dock sotto il puntatore e sopravvive all'anteprima che lo
     // porta in un'altra zona. Fuori dal pannello AppKit manda ancora qui il trascinamento (alla finestra del clic): conta
-    // solo l'altezza.
+    // solo la posizione lungo la barra.
     private var rearrange: some Gesture {
         DragGesture(minimumDistance: 4, coordinateSpace: .named("bar")).modifiers(.command)
             .updating($pressing) { _, on, _ in on = true }
@@ -189,7 +197,7 @@ struct SideBarView: View {
                 if held?.start == v.startLocation { drag.current?.point = onScreen(v.location); return }
                 // Sul Dock, non accanto: tutta la barra prende il punto (contentShape, per il suo rilascio).
                 guard let hit = frames.first(where: { shows($0.key) && $0.value.contains(v.startLocation) }) else { return }
-                held = (v.startLocation, v.startLocation.y - hit.value.minY)
+                held = (v.startLocation, alongBar(v.startLocation, side.axis).y - alongBar(hit.value, side.axis).minY)
                 drag.current = SideDrag.Current(id: hit.key, display: place.display, start: onScreen(v.startLocation), point: onScreen(v.location),
                                                 frames: frames.mapValues { $0.offsetBy(dx: place.bar.minX, dy: place.bar.minY) })
             }
@@ -209,12 +217,17 @@ struct SideBarView: View {
 }
 
 // Un Dock nella barra, come lo fanno SideBarView e le prove: quello trascinato col ⌘ resta sotto il puntatore anche quando
-// l'anteprima gli cambia posto o zona (lo scostamento letto mentre si disegna, visualEffect). `grab`: quanto sotto la sua
-// cima l'hai preso, se è lui; `pointer`: l'altezza del puntatore nello spazio "bar". Niente qui aggiunge una vista: un
-// Dock senza niente da mostrare resta senza, e la zona non gli dà un distacco.
+// l'anteprima gli cambia posto o zona (lo scostamento letto mentre si disegna, visualEffect). `grab`: quanto dopo il suo
+// inizio l'hai preso, se è lui; `pointer`: il puntatore nello spazio "bar". Tutti e due lungo la barra (alongBar, `axis`):
+// lo scostamento è solo lungo di lei. Niente qui aggiunge una vista: un Dock senza niente da mostrare resta senza, e la
+// zona non gli dà un distacco.
 extension View {
-    func inBar(grab: CGFloat?, pointer: CGFloat) -> some View {
-        visualEffect { effect, proxy in effect.offset(y: grab.map { pointer - $0 - proxy.frame(in: .named("bar")).minY } ?? 0) }
+    func inBar(grab: CGFloat?, pointer: CGFloat, axis: BarAxis) -> some View {
+        visualEffect { effect, proxy in
+            let along = grab.map { pointer - $0 - alongBar(proxy.frame(in: .named("bar")), axis).minY } ?? 0
+            let shift = alongBar(CGPoint(x: 0, y: along), axis)
+            return effect.offset(x: shift.x, y: shift.y)
+        }
             .zIndex(grab == nil ? 0 : 1)
             // Quello trascinato cambia posto senza animazione (resta incollato al puntatore); gli altri scivolano.
             .transaction { if grab != nil { $0.animation = nil } }

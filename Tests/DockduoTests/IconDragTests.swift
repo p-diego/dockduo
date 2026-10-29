@@ -35,6 +35,24 @@ private func target(_ x: CGFloat, _ y: CGFloat) -> String? { iconDropTarget(at: 
     #expect(target(26, 156) == "2")
 }
 
+// In basso le stesse prove girate (alongBar): le pillole in fila lungo la larghezza, il puntatore dentro l'altezza della
+// barra (52) vale, fuori no.
+private let bottomPills: [String: CGRect] = [
+    "1": CGRect(x: 10, y: 13, width: 40, height: 26),
+    "2": CGRect(x: 56, y: 13, width: 100, height: 26),
+]
+private func bottomTarget(_ x: CGFloat, _ y: CGFloat) -> String? {
+    iconDropTarget(at: alongBar(CGPoint(x: x, y: y), .horizontal), from: "1", pills: bottomPills.mapValues { alongBar($0, .horizontal) },
+                   thickness: 52)
+}
+
+@Test func atTheBottomTheDropFollowsTheWidth() {
+    #expect(bottomTarget(80, 26) == "2")
+    #expect(bottomTarget(20, 26) == nil && bottomTarget(53, 26) == nil && bottomTarget(80, 60) == nil && bottomTarget(80, -1) == nil)
+    #expect([2, 50, 0, 52].allSatisfy { bottomTarget(80, $0) == "2" })
+    #expect(bottomTarget(56, 26) == "2" && bottomTarget(156, 26) == "2")
+}
+
 @Test func moveArgsFollowOnlyWhenAsked() {
     #expect(moveWindowArgs(windowID: 42, to: "3", follow: false) == ["move-node-to-workspace", "--window-id", "42", "--", "3"])
     #expect(moveWindowArgs(windowID: 42, to: "3", follow: true)
@@ -74,7 +92,7 @@ private func target(_ x: CGFloat, _ y: CGFloat) -> String? { iconDropTarget(at: 
     let icons = IconDragging()
     icons.moved(app, from: "1", start: CGPoint(x: 26, y: 20), location: CGPoint(x: 26, y: 30), fallback: 20)
     #expect(icons.drag?.location == CGPoint(x: 26, y: 30) && IconDragging.inProgress == 1)
-    icons.dropped(at: CGPoint(x: 26, y: 300), BarState(), thickness: 52)
+    icons.dropped(at: CGPoint(x: 26, y: 300), BarState(), thickness: 52, axis: .vertical)
     for _ in 0..<50 where icons.drag != nil { try await Task.sleep(for: .milliseconds(20)) }   // il ritorno, 0,2 s
     #expect(icons.drag == nil && IconDragging.inProgress == 0)
 

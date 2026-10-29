@@ -2,7 +2,7 @@ import SwiftUI
 
 // Trascinare l'icona di una finestra su un'altra pillola spazio (spec 2026-09-26-siigil-trascina-icone-design.md):
 // la finestra passa a quello spazio. Qui lo stato, le due decisioni pure e le regole del trascinamento (IconDragging),
-// in colonna; il gesto sta in WorkspacePill. Sul modello del ⌘-trascina dei Dock (SideRearrange.swift).
+// lungo la barra; il gesto sta in WorkspacePill. Sul modello del ⌘-trascina dei Dock (SideRearrange.swift).
 
 // Il trascinamento in corso, nello spazio di coordinate "bar": la finestra, lo spazio di partenza, il punto di presa
 // (dove torna la copia se il rilascio non va a segno), il puntatore e il lato della copia (iconCopySize).
@@ -19,9 +19,9 @@ struct IconDrag {
 // dovrebbe capitare) la grandezza di prima, 20 alla scala della barra (fallback).
 func iconCopySize(pill: CGRect?, fallback: CGFloat) -> CGFloat { pill.map { $0.width * 20 / 26 } ?? fallback }
 
-// Su quale pillola cade: quella la cui riga (intervallo verticale, estremi inclusi) contiene il puntatore, purché il
-// puntatore sia dentro la larghezza della barra (`thickness`). Nessuna se è la pillola di partenza, se cade tra due
-// pillole o fuori dalla barra.
+// Su quale pillola cade: quella il cui tratto lungo la barra (estremi inclusi) contiene il puntatore, purché il puntatore
+// sia dentro lo spessore della barra (`thickness`). Nessuna se è la pillola di partenza, se cade tra due pillole o fuori
+// dalla barra. Lungo è la y, attraverso la x: in basso punto e pillole arrivano girati (alongBar).
 func iconDropTarget(at point: CGPoint, from: String, pills: [String: CGRect], thickness: CGFloat) -> String? {
     guard (0...thickness).contains(point.x) else { return nil }
     let hit = pills.first { $0.value.minY <= point.y && point.y <= $0.value.maxY }?.key
@@ -29,7 +29,7 @@ func iconDropTarget(at point: CGPoint, from: String, pills: [String: CGRect], th
 }
 
 // Il trascina icone di una barra: ognuna ne tiene uno (@State) e lo passa alle sue pillole spazio
-// (hooks), con la larghezza della barra per iconDropTarget. Tutto nello spazio "bar" della barra.
+// (hooks), con lo spessore e l'asse della barra per iconDropTarget. Tutto nello spazio "bar" della barra.
 @Observable final class IconDragging {
     // Quanti trascinamenti sono in corso, fra le barre di tutti gli schermi: col nascondi automatico tengono fuori la
     // barra (BarHold). Conta i passaggi fra niente e qualcosa, così la fine di uno non spegne quello di un'altra barra.
@@ -45,11 +45,11 @@ func iconDropTarget(at point: CGPoint, from: String, pills: [String: CGRect], th
     private var pillFrames: [String: CGRect] = [:]
 
     // Lo stato (la pillola su cui cadrebbe l'icona, bordo bianco; l'icona in mano) e i gesti, per le pillole di una barra.
-    func hooks(_ state: BarState, thickness: CGFloat) -> IconDragHooks {
-        IconDragHooks(target: drag.flatMap { iconDropTarget(at: $0.location, from: $0.from, pills: livePillFrames(state), thickness: thickness) },
+    func hooks(_ state: BarState, thickness: CGFloat, axis: BarAxis) -> IconDragHooks {
+        IconDragHooks(target: drag.flatMap { target(at: $0.location, from: $0.from, state, thickness: thickness, axis: axis) },
                       dragging: drag?.app.windowID,
                       onDrag: { [self] app, name, start, at in moved(app, from: name, start: start, location: at, fallback: 20 * thickness / 38) },   // thickness / 38: la scala della barra
-                      onDrop: { [self] at in dropped(at: at, state, thickness: thickness) },
+                      onDrop: { [self] at in dropped(at: at, state, thickness: thickness, axis: axis) },
                       pillFrame: { [self] in pillFrames[$0] = $1 })
     }
 
@@ -59,6 +59,11 @@ func iconDropTarget(at point: CGPoint, from: String, pills: [String: CGRect], th
     }
 
     private func livePillFrames(_ state: BarState) -> [String: CGRect] { pillFrames.filter { f in state.reports.contains { $0.workspace.name == f.key } } }
+
+    // La pillola sotto il puntatore (iconDropTarget), con punto e pillole girati lungo la barra (alongBar).
+    private func target(at p: CGPoint, from: String, _ state: BarState, thickness: CGFloat, axis: BarAxis) -> String? {
+        iconDropTarget(at: alongBar(p, axis), from: from, pills: livePillFrames(state).mapValues { alongBar($0, axis) }, thickness: thickness)
+    }
 
     // Il gesto dell'icona parte qui al primo movimento oltre i 4 pt. Con ⌘ premuto è il ⌘-trascina del gruppo: niente.
     // Un gesto di un'altra finestra riparte da capo (la precedente può essere ancora appesa nel ritorno a vuoto). `start` e
@@ -75,9 +80,9 @@ func iconDropTarget(at point: CGPoint, from: String, pills: [String: CGRect], th
 
     // Su un'altra pillola: AeroSpace sposta la finestra (lo spazio la segue se era quella a fuoco) e la barra si aggiorna
     // come dopo ogni azione. Altrove: la copia torna al punto di presa e sparisce.
-    func dropped(at location: CGPoint, _ state: BarState, thickness: CGFloat) {
+    func dropped(at location: CGPoint, _ state: BarState, thickness: CGFloat, axis: BarAxis) {
         guard let d = drag else { return }
-        if let to = iconDropTarget(at: location, from: d.from, pills: livePillFrames(state), thickness: thickness) {
+        if let to = target(at: location, from: d.from, state, thickness: thickness, axis: axis) {
             drag = nil
             moveWindow(id: d.app.windowID, to: to, follow: d.app.windowID == state.frontWindow)
         } else {

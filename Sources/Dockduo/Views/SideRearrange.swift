@@ -1,5 +1,14 @@
 import SwiftUI
 
+// L'unico giro fra i lati (spec app conclusa §3.3): le prove di un asse solo (sideDropTarget, sectionTarget, hoveredDock,
+// dropSpot, dockSpot, folderDropIndex, iconDropTarget) leggono "lungo la barra" nella y e "attraverso" nella x. Di lato è
+// così com'è; in basso chi le chiama gira punti e cornici di qui, x e y scambiati: l'inizio della barra (la cima) è la sua
+// sinistra. Una cornice che non c'è (.null) resta tale.
+func alongBar(_ p: CGPoint, _ axis: BarAxis) -> CGPoint { axis == .vertical ? p : CGPoint(x: p.y, y: p.x) }
+func alongBar(_ r: CGRect, _ axis: BarAxis) -> CGRect {
+    axis == .vertical || r.isNull ? r : CGRect(x: r.minY, y: r.minX, width: r.height, height: r.width)
+}
+
 // Dove cade un Dock trascinato nella barra di lato (coordinate dall'alto): la zona dal terzo di `barTop...barBottom`, la
 // posizione dopo l'ultimo altro Dock della zona con midY sopra il puntatore. Quelli senza frame non contano, come in
 // dropTarget. Una barra senza altezza (pannello non ancora piazzato) dà la zona in cima: il terzo di zero farebbe

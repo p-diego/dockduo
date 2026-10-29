@@ -1,4 +1,5 @@
-import CoreGraphics
+import AppKit
+import SwiftUI
 import Testing
 @testable import Dockduo
 
@@ -52,8 +53,52 @@ struct SideLabelsTests {
         var items: [String: SideLabel] = ["front": SideLabel(text: "Code", style: .glass, anchor: icon),
                                           "agent-7": SideLabel(text: "Waiting for you", style: .agent(color: nil), anchor: icon),
                                           "agent-8": SideLabel(text: "Finished", style: .agent(color: nil), anchor: below)]
-        #expect(coveredLabels(items) == ["front"])
+        #expect(coveredLabels(items, axis: .vertical) == ["front"])
         items["dock"] = SideLabel(text: "Code", style: .dockName, anchor: row)
-        #expect(coveredLabels(items) == ["front", "agent-7"])
+        #expect(coveredLabels(items, axis: .vertical) == ["front", "agent-7"])
     }
+    // In basso la stessa prova girata (alongBar): un testo solo sopra ogni icona, quindi per colonna. Due testi sulla stessa
+    // colonna non si sovrappongono (uno è coperto); quelli delle icone vicine, tutti alla stessa altezza, restano.
+    @Test func bottomLabelsDontCover() {
+        let column = CGRect(x: 10, y: 3, width: 31, height: 45), icon = CGRect(x: 10, y: 10, width: 31, height: 31)
+        let next = column.offsetBy(dx: 33, dy: 0)
+        var items: [String: SideLabel] = ["front": SideLabel(text: "Code", style: .glass, anchor: icon),
+                                          "agent-7": SideLabel(text: "Waiting for you", style: .agent(color: nil), anchor: icon),
+                                          "agent-8": SideLabel(text: "Finished", style: .agent(color: nil), anchor: next)]
+        #expect(coveredLabels(items, axis: .horizontal) == ["front"])
+        items["dock"] = SideLabel(text: "Code", style: .dockName, anchor: column)
+        #expect(coveredLabels(items, axis: .horizontal) == ["front", "agent-7"])
+    }
+    // In basso i nomi stanno sopra le icone (spec app conclusa §3.2), come nel Dock di macOS in basso: il nome di una voce
+    // centrato sulla sua x, il fondo a dockNameGap dal lato del pannello che tocca la barra, quindi sopra la barra.
+    @MainActor @Test func namesSitAboveTheIcons() throws {
+        let labels = SideLabels(), anchor = CGRect(x: 200, y: 4, width: 31, height: 45)   // una voce del Dock in basso, a barra 52
+        labels.show(SideLabels.dock, SideLabel(text: "App Store", style: .dockName, anchor: anchor))
+        let ink = try inkBounds(SideLabelsView(labels: labels, side: .bottom), size: CGSize(width: 400, height: 360))
+        let bottom = 360 - dockNameGap(anchor: anchor, barWidth: 52, side: .bottom)
+        #expect(abs(ink.midX - anchor.midX) < 2, "\(ink)")
+        #expect(ink.maxY <= bottom + 0.5 && ink.minY >= bottom - 26 - 0.5, "\(ink)")
+    }
+}
+
+// Dove si disegna qualcosa (i pixel non trasparenti), in punti dalla cima a sinistra, in una finestra mai mostrata (per la
+// scala dello schermo). Fuori dallo schermo il vetro non si disegna: di un'etichetta resta il testo.
+@MainActor func inkBounds(_ view: some View, size: CGSize) throws -> CGRect {
+    _ = NSApplication.shared
+    let host = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    host.layoutSubtreeIfNeeded()
+    let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+    host.cacheDisplay(in: host.bounds, to: rep)
+    let bytes = try #require(rep.bitmapData), step = rep.bitsPerPixel / 8, k = CGFloat(rep.pixelsWide) / size.width
+    var (x0, y0, x1, y1) = (Int.max, Int.max, -1, -1)
+    for y in 0..<rep.pixelsHigh {
+        let row = bytes + y * rep.bytesPerRow
+        for x in 0..<rep.pixelsWide where (0..<step).contains(where: { row[x * step + $0] != 0 }) {
+            (x0, y0, x1, y1) = (min(x0, x), min(y0, y), max(x1, x), max(y1, y))
+        }
+    }
+    withExtendedLifetime(window) {}
+    return x1 < 0 ? .null : CGRect(x: CGFloat(x0) / k, y: CGFloat(y0) / k, width: CGFloat(x1 - x0 + 1) / k, height: CGFloat(y1 - y0 + 1) / k)
 }

@@ -2,7 +2,8 @@ import SwiftUI
 
 // I testi brevi (app in primo piano, canzone, gli agenti sull'app) nella barra di lato non stanno
 // nella barra stretta: escono accanto alla loro pillola, verso il centro dello schermo, per 5 s a ogni novità (spec
-// barra-di-lato §4).
+// barra-di-lato §4). In basso sopra la pillola, centrati su di lei, come i nomi del Dock di macOS in basso (spec app
+// conclusa §3.2).
 // Il pannello che li ospita è di SidePanel; qui l'archivio, il modificatore e la vista.
 let sideLabelSeconds: TimeInterval = 5
 
@@ -112,7 +113,7 @@ private struct SideLabelModifier: ViewModifier {
 
 struct SideLabelsView: View {
     let labels: SideLabels
-    let opensLeft: Bool   // barra sul bordo destro: i testi escono a sinistra
+    let side: Side   // il lato della barra: i testi escono dall'altra parte (a sinistra della barra a destra, sopra quella in basso)
     @Environment(\.palette) private var palette
     @Environment(\.barScale) private var scale
     private let settings = Settings.shared
@@ -120,16 +121,18 @@ struct SideLabelsView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                let covered = coveredLabels(labels.items)
+                let axis = side.axis, covered = coveredLabels(labels.items, axis: axis)
+                let across = alongBar(CGRect(origin: .zero, size: geo.size), axis).width   // il pannello attraverso la barra
                 ForEach(labels.items.sorted { $0.key < $1.key }, id: \.key) { id, label in
                     let dock = label.style == .dockName   // compare, cambia voce e sparisce di colpo, come nel Dock di macOS
+                    // Il nome del Dock di lato mezzo punto più su, come lì; in basso centrato sulla voce.
+                    let along = alongBar(label.anchor, axis).midY - (dock && axis == .vertical ? 0.5 : 0)
                     view(label)
                         // il vuoto fra barra e testo; il nome del Dock dal vetro del Dock
-                        .padding(opensLeft ? .trailing : .leading,
-                                 dock ? dockNameGap(anchor: label.anchor, barWidth: settings.sideWidth, opensLeft: opensLeft) : 8)
-                        .frame(width: geo.size.width, alignment: opensLeft ? .trailing : .leading)
-                        .position(x: geo.size.width / 2, y: label.anchor.midY - (dock ? 0.5 : 0))   // il nome del Dock mezzo punto più su, come lì
-                        .transition(dock ? .identity : .scale(scale: 0.5, anchor: opensLeft ? .trailing : .leading).combined(with: .opacity))
+                        .padding(toBar.edge, dock ? dockNameGap(anchor: label.anchor, barWidth: settings.sideWidth, side: side) : 8)
+                        .frame(axis, across: across, alignment: toBar.alignment)
+                        .position(alongBar(CGPoint(x: across / 2, y: along), axis))
+                        .transition(dock ? .identity : .scale(scale: 0.5, anchor: toBar.anchor).combined(with: .opacity))
                         .transaction { if dock { $0.animation = nil } }
                         // Coperto dal nome del Dock (coveredLabels) se ne va e torna di colpo come lui, senza animarsi sotto.
                         .opacity(covered.contains(id) ? 0 : 1)
@@ -140,6 +143,15 @@ struct SideLabelsView: View {
             .animation(.smooth(duration: 0.25), value: labels.items)
         }
         .allowsHitTesting(false)
+    }
+
+    // Il lato del pannello che tocca la barra: lì si appoggiano i testi, e da lì crescono comparendo.
+    private var toBar: (edge: Edge.Set, alignment: Alignment, anchor: UnitPoint) {
+        switch side {
+        case .left: (.leading, .leading, .leading)
+        case .right: (.trailing, .trailing, .trailing)
+        case .bottom: (.bottom, .bottom, .bottom)
+        }
     }
 
     @ViewBuilder private func view(_ label: SideLabel) -> some View {
@@ -159,12 +171,13 @@ struct SideLabelsView: View {
 
 // Accanto a un'icona un testo solo, o due capsule si sovrapporrebbero: prima il nome del Dock al passaggio del mouse (lo
 // chiedi tu), poi il testo dell'agente, poi gli altri (l'app davanti). Gli id di quelli coperti: restano, invisibili, e
-// tornano quando la riga si libera.
-func coveredLabels(_ items: [String: SideLabel]) -> Set<String> {
+// tornano quando la riga si libera. La riga è il punto lungo la barra (alongBar): di lato l'altezza, in basso la colonna.
+func coveredLabels(_ items: [String: SideLabel], axis: BarAxis) -> Set<String> {
     func rank(_ id: String) -> Int { id == SideLabels.dock ? 0 : id.hasPrefix("agent-") ? 1 : 2 }
     var rows: [CGFloat] = [], covered: Set<String> = []
     for (id, label) in items.sorted(by: { (rank($0.key), $0.key) < (rank($1.key), $1.key) }) {
-        if rows.contains(where: { abs($0 - label.anchor.midY) < 1 }) { covered.insert(id) } else { rows.append(label.anchor.midY) }
+        let row = alongBar(label.anchor, axis).midY
+        if rows.contains(where: { abs($0 - row) < 1 }) { covered.insert(id) } else { rows.append(row) }
     }
     return covered
 }

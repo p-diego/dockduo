@@ -25,7 +25,7 @@ import Testing
             labels.show(SideLabels.dock, SideLabel(text: "App Store", style: .dockName, anchor: CGRect(x: 3, y: 420, width: 65, height: 60)))
             let bar = SideBarView(state: state, side: side, place: place).environment(\.sideLabels, labels)
                 .environment(\.barVisibility, BarVisibility()).frame(width: shown.width, height: shown.height)
-            let text = SideLabelsView(labels: labels, opensLeft: side == .right).modifier(SideLook())
+            let text = SideLabelsView(labels: labels, side: side).modifier(SideLook())
                 .frame(width: 360, height: shown.height)
             let view = HStack(spacing: 0) { if side == .left { bar; text } else { text; bar } }
                 .padding(side == .left ? .leading : .trailing, barEdge).environment(\.colorScheme, .dark)
@@ -35,8 +35,9 @@ import Testing
 }
 
 // La barra in basso, da guardare (BOTTOM_SHOTS=cartella, spec app conclusa §3.2): la striscia vera lungo tutto il bordo, alta
-// 71, a 2 dal bordo e dai lati, col Dock dell'autore, fuori e dentro la modifica. Senza i nomi: sopra le icone li mette la
-// barra in basso quando li avrà.
+// 71, a 2 dal bordo e dai lati, col Dock dell'autore, fuori e dentro la modifica, e sopra il pannello delle etichette
+// (labelPanelFrame) col nome della prima icona (Finder): il Dock al centro, 5 icone da 31, 2 fra l'una e l'altra, 7 per
+// capo, la capsula 45 alta mezzo punto verso il bordo (a barra 52, qui in scala).
 @MainActor @Test(.enabled(if: ProcessInfo.processInfo.environment["BOTTOM_SHOTS"] != nil)) func bottomShots() async throws {
     _ = NSApplication.shared
     let out = URL(fileURLWithPath: ProcessInfo.processInfo.environment["BOTTOM_SHOTS"]!)
@@ -47,12 +48,17 @@ import Testing
     let shown = sideBarFrame(screen: mac, side: .bottom, width: 71, edge: barEdge, top: 38)
     let place = SidePlace()
     place.bar = screenTop(shown, in: mac)
+    let u = 71.0 / 52, labels = SideLabels()
+    labels.show(SideLabels.dock, SideLabel(text: "Finder", style: .dockName,
+                                           anchor: CGRect(x: shown.width / 2 - 177 / 2 * u + 7 * u, y: (71 - 45 * u) / 2 + 0.5 * u,
+                                                          width: 31 * u, height: 45 * u)))
     for edit in [false, true] {
         if edit { Editing.shared.begin() }
-        let bar = SideBarView(state: state, side: .bottom, place: place).environment(\.barVisibility, BarVisibility())
-            .frame(width: shown.width, height: shown.height)
-        try await shot(bar.padding([.horizontal, .bottom], barEdge).environment(\.colorScheme, .dark), backdrop: backdrop,
-                       to: out.appendingPathComponent("barra-bottom-\(edit ? "modifica" : "riposo").png"))
+        let bar = SideBarView(state: state, side: .bottom, place: place).environment(\.sideLabels, labels)
+            .environment(\.barVisibility, BarVisibility()).frame(width: shown.width, height: shown.height)
+        let text = SideLabelsView(labels: labels, side: .bottom).modifier(SideLook()).frame(width: shown.width, height: 360)
+        let view = VStack(spacing: 0) { text; bar }.padding([.horizontal, .bottom], barEdge).environment(\.colorScheme, .dark)
+        try await shot(view, backdrop: backdrop, to: out.appendingPathComponent("barra-bottom-\(edit ? "modifica" : "riposo").png"))
     }
 }
 

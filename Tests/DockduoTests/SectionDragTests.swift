@@ -135,6 +135,72 @@ private func look(_ docks: [DockBox]) -> [[[BarItem]]] { Zone.allCases.map { z i
     #expect(sectionTarget(at: 65, docks: withHidden, zones: zones) == .newDock(zone: .top, index: 1))
 }
 
+// In basso la stessa prova girata: cornici e puntatore lungo la larghezza (alongBar), le zone i terzi da sinistra, gli
+// stessi posti; il Dock che non si vede resta senza cornice anche girato.
+@Test func theSectionTargetFollowsTheWidthAtTheBottom() {
+    let a = DockBox(zone: .top, sections: w(.status)), a2 = DockBox(zone: .top, sections: w(.workspaces))
+    let b = DockBox(zone: .bottom, sections: w(.apps, .folders, .shelf)), hidden = DockBox(zone: .top, sections: [])
+    let docks: [(box: DockBox, frame: CGRect, sections: [CGRect])] = [
+        (a, CGRect(x: 10, y: 0, width: 50, height: 52), [CGRect(x: 10, y: 0, width: 50, height: 52)]),
+        (hidden, .null, []),
+        (a2, CGRect(x: 70, y: 3, width: 50, height: 45), [CGRect(x: 77, y: 10, width: 36, height: 31)]),
+        (b, CGRect(x: 700, y: 3, width: 200, height: 45), [CGRect(x: 707, y: 10, width: 50, height: 31),
+                                                           CGRect(x: 770, y: 10, width: 50, height: 31),
+                                                           CGRect(x: 833, y: 10, width: 60, height: 31)]),
+    ]
+    let zones: [Zone: CGRect] = [.top: CGRect(x: 0, y: 0, width: 333, height: 52), .middle: CGRect(x: 333, y: 0, width: 333, height: 52),
+                                 .bottom: CGRect(x: 666, y: 0, width: 333, height: 52)]
+    let h = BarAxis.horizontal
+    func target(_ x: CGFloat) -> SectionTarget? {
+        sectionTarget(at: alongBar(CGPoint(x: x, y: 26), h).y, docks: docks.map { ($0.box, alongBar($0.frame, h), $0.sections.map { alongBar($0, h) }) },
+                      zones: zones.mapValues { alongBar($0, h) })
+    }
+    #expect(target(795) == .into(dock: b.id, index: 1))
+    #expect(target(702) == .into(dock: b.id, index: 0) && target(898) == .into(dock: b.id, index: 3))
+    #expect(target(130) == .newDock(zone: .top, index: 3) && target(65) == .newDock(zone: .top, index: 1))
+    #expect(target(5) == .newDock(zone: .top, index: 0) && target(500) == .newDock(zone: .middle, index: 0))
+    #expect(target(950) == .newDock(zone: .bottom, index: 1) && target(680) == .newDock(zone: .bottom, index: 0))
+    #expect(target(1200) == nil)
+}
+
+// Il rilascio sul Dock in basso: le prove di lato (theDockUnderADragKeepsItWhileItGrows, theDropSpotStaysWhileTheDockGrows,
+// dropIndexBetweenFolders) girate lungo la larghezza (alongBar), con gli stessi risultati.
+@Test func theBottomDockDropFollowsTheWidth() {
+    let (d, name) = fresh(); defer { d.removePersistentDomain(forName: name) }
+    let s = Dockduo.Settings(defaults: d), a = UUID(), b = UUID(), h = BarAxis.horizontal
+    s.dockFolders = [a, b].map { DockItem(id: $0, bookmark: Data(), url: URL(fileURLWithPath: "/"), hidden: false) }
+    let box = DockBox(zone: .middle, sections: w(.apps, .folders, .shelf)), shelf = DockBox(zone: .middle, sections: w(.shelf))
+    let rest = CGRect(x: 409, y: 3, width: 249, height: 45), grown = CGRect(x: 383.5, y: 3, width: 300, height: 45)
+    let resting = [box.id: rest, shelf.id: CGRect(x: 664, y: 3, width: 45, height: 45),
+                   a: CGRect(x: 580, y: 10, width: 31, height: 31), b: CGRect(x: 613, y: 10, width: 31, height: 31)].mapValues { alongBar($0, h) }
+    func under(_ x: CGFloat, across: CGFloat = 26, now: CGRect, hovered: UUID?) -> UUID? {
+        hoveredDock(at: alongBar(CGPoint(x: x, y: across), h), docks: [box.id, shelf.id], resting: resting,
+                    current: resting.merging([box.id: alongBar(now, h)]) { $1 }, hovered: hovered)
+    }
+    #expect(under(646.4, now: rest, hovered: nil) == box.id && under(646.4, now: grown, hovered: box.id) == box.id)
+    #expect(under(395, now: grown, hovered: box.id) == box.id && under(395, now: grown, hovered: nil) == nil)
+    #expect(under(670, now: rest, hovered: nil) == shelf.id && under(380, now: grown, hovered: box.id) == nil)
+    #expect(under(646.4, across: 51, now: rest, hovered: nil) == box.id && under(646.4, across: 0.5, now: rest, hovered: nil) == box.id)
+    func spot(_ x: CGFloat, moving: UUID? = nil) -> DockSpot { s.dropSpot(in: box, y: alongBar(CGPoint(x: x, y: 26), h).y, resting: resting, moving: moving) }
+    #expect(spot(620) == .folders(before: b))
+    #expect(spot(657) == .folders(before: nil) && spot(658) == .shelf && spot(670, moving: a) == .folders(before: nil))
+    let folders = (0..<3).map { alongBar(CGRect(x: 100 + 33 * CGFloat($0), y: 7, width: 31, height: 31), h) }
+    #expect([10, 110, 120, 165, 500].map { folderDropIndex(y: alongBar(CGPoint(x: $0, y: 26), h).y, folderFrames: folders) } == [0, 0, 1, 2, 3])
+}
+
+// Al bordo in basso il passo del Dock si misura sullo spessore della barra (la sua altezza), non sulla sua lunghezza: la
+// prova di aFolderIsRemovedOnlyFarFromTheBar girata, con gli stessi risultati.
+@Test func aFolderIsRemovedOnlyFarFromTheBottomBar() {
+    let bar = CGRect(x: 0, y: 100, width: 900, height: 52), other = CGRect(x: 0, y: 2000, width: 900, height: 52)
+    #expect(!folderDragRemoves([], at: CGPoint(x: 400, y: 155), bars: [bar]))
+    #expect(!folderDragRemoves([], at: CGPoint(x: 400, y: 184), bars: [bar]))
+    #expect(folderDragRemoves([], at: CGPoint(x: 400, y: 186), bars: [bar]))
+    #expect(folderDragRemoves([], at: CGPoint(x: 400, y: 60), bars: [bar]))
+    #expect(!folderDragRemoves([], at: CGPoint(x: 400, y: 2026), bars: [bar, other]))
+    #expect(folderDragRemoves([], at: CGPoint(x: 400, y: 1000), bars: [bar, other]))
+    #expect(!folderDragRemoves(.move, at: CGPoint(x: 400, y: 400), bars: [bar]))
+}
+
 // Il posto si apre dove la sezione cadrebbe davvero (lo Stato davanti al Dock, non dentro), e non dove lasciarla non cambia
 // niente: da dove parte, sul suo posto, la barra resta ferma sotto il puntatore.
 @MainActor @Test func theRoomOpensOnlyWhereTheSectionWouldMove() {
